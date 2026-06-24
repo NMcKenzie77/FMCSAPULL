@@ -25,12 +25,12 @@ export interface LeadExportRow {
   cargo: string[] | null;
 }
 
-async function postJson(url: string, secret: string, payload: unknown): Promise<{ status: number; body: string }> {
+async function postJson(url: string, apiKey: string, payload: unknown): Promise<{ status: number; body: string }> {
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      ...(secret ? { 'x-fmcsapull-secret': secret } : {})
+      ...(apiKey ? { 'x-fmcsapull-secret': apiKey } : {})
     },
     body: JSON.stringify(payload)
   });
@@ -58,17 +58,19 @@ export async function getTopLeads(limit = 100, minGrade = 'B'): Promise<LeadExpo
   return result.rows;
 }
 
-export async function exportToArkon(limit = 100, minGrade = 'B'): Promise<{ sent: number; skipped: boolean }> {
+export async function exportToArkon(limit = 100, minGrade = 'B'): Promise<{ sent: number; skipped: boolean; agencyId?: string }> {
   if (!config.arkonWebhookUrl) return { sent: 0, skipped: true };
   const leads = await getTopLeads(limit, minGrade);
-  const response = await postJson(config.arkonWebhookUrl, config.arkonWebhookSecret, {
+  const payload = {
+    agencyId: config.defaultAgencyId,
     source: 'FMCSA_DATAHUB',
     leadType: 'TRUCKING_PNC_INSURANCE',
     leads
-  });
+  };
+  const response = await postJson(config.arkonWebhookUrl, config.arkonWebhookSecret, payload);
   await query(`update insurance_leads set exported_to_arkon_at = now() where id = any($1::bigint[])`, [leads.map((lead) => lead.id)]);
-  if (response.status < 200 || response.status >= 300) throw new Error(`ARKON export failed ${response.status}: ${response.body.slice(0, 500)}`);
-  return { sent: leads.length, skipped: false };
+  if (response.status < 200 || response.status >= 300) throw new Error('ARKON export failed');
+  return { sent: leads.length, skipped: false, agencyId: config.defaultAgencyId };
 }
 
 export async function exportToSheets(limit = 100, minGrade = 'B'): Promise<{ sent: number; skipped: boolean }> {
@@ -80,6 +82,6 @@ export async function exportToSheets(limit = 100, minGrade = 'B'): Promise<{ sen
     leads
   });
   await query(`update insurance_leads set exported_to_sheets_at = now() where id = any($1::bigint[])`, [leads.map((lead) => lead.id)]);
-  if (response.status < 200 || response.status >= 300) throw new Error(`Sheets export failed ${response.status}: ${response.body.slice(0, 500)}`);
+  if (response.status < 200 || response.status >= 300) throw new Error('Sheets export failed');
   return { sent: leads.length, skipped: false };
 }
