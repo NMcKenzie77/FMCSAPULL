@@ -23,6 +23,7 @@ export const config = {
   },
   importLimit: intEnv('FMCSA_IMPORT_LIMIT', 5000),
   defaultImportSource: (process.env.FMCSA_IMPORT_SOURCE as ImportSource | undefined) ?? 'carrier-daily',
+  defaultAgencyId: process.env.DEFAULT_AGENCY_ID ?? 'invicta-capital-group',
   arkonWebhookUrl: process.env.ARKON_WEBHOOK_URL ?? '',
   arkonWebhookSecret: process.env.ARKON_WEBHOOK_SECRET ?? '',
   googleSheetsWebhookUrl: process.env.GOOGLE_SHEETS_WEBHOOK_URL ?? '',
@@ -30,9 +31,7 @@ export const config = {
 };
 
 export function requireDatabaseUrl(): string {
-  if (!config.databaseUrl) {
-    throw new Error('DATABASE_URL is required. Attach a Railway Postgres database or set DATABASE_URL.');
-  }
+  if (!config.databaseUrl) throw new Error('DATABASE_URL is required.');
   return config.databaseUrl;
 }
 
