@@ -3,6 +3,7 @@ import { config, type ImportSource } from './config.js';
 import { initSchema, query } from './db.js';
 import { importFmcsa, refreshScores } from './importer.js';
 import { exportToArkon, exportToSheets, getTopLeads } from './export/webhooks.js';
+import { publicScoringRules } from './leads/scoringRules.js';
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
@@ -16,6 +17,10 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'fmcsa-insurance-leads' });
+});
+
+app.get('/scoring/rules', (_req, res) => {
+  res.json({ ok: true, scoring: publicScoringRules() });
 });
 
 app.post('/admin/db/init', requireAdmin, async (_req, res, next) => {
