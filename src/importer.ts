@@ -111,8 +111,8 @@ async function upsertLead(client: PoolClient, carrierId: number, carrier: Normal
     `insert into insurance_leads (
       carrier_id, usdot_number, lead_grade, lead_score, commercial_pnc_score,
       life_health_score, urgency_score, risk_adjustment, recommended_products,
-      outreach_angle, scoring_reasons
-    ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      outreach_angle, scoring_reasons, scoring_version, applied_rule_ids
+    ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
     on conflict (usdot_number) do update set
       carrier_id = excluded.carrier_id,
       lead_grade = excluded.lead_grade,
@@ -124,6 +124,8 @@ async function upsertLead(client: PoolClient, carrierId: number, carrier: Normal
       recommended_products = excluded.recommended_products,
       outreach_angle = excluded.outreach_angle,
       scoring_reasons = excluded.scoring_reasons,
+      scoring_version = excluded.scoring_version,
+      applied_rule_ids = excluded.applied_rule_ids,
       updated_at = now()`,
     [
       carrierId,
@@ -136,7 +138,9 @@ async function upsertLead(client: PoolClient, carrierId: number, carrier: Normal
       score.riskAdjustment,
       score.recommendedProducts,
       score.outreachAngle,
-      score.scoringReasons
+      score.scoringReasons,
+      score.scoringVersion,
+      score.appliedRuleIds
     ]
   );
 }
