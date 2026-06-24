@@ -10,7 +10,6 @@ export interface RuleContext {
   operationText: string;
   rawText: string;
   insuranceText: string;
-  daysSinceMcs150: number | null;
 }
 
 export interface ScoringRule {
@@ -42,8 +41,6 @@ function hasAny(haystack: string, needles: string[]): boolean {
 }
 
 export function buildRuleContext(carrier: NormalizedCarrier): RuleContext {
-  const mcsDate = carrier.mcs150Date ? new Date(carrier.mcs150Date).getTime() : Number.NaN;
-  const daysSinceMcs150 = Number.isNaN(mcsDate) ? null : (Date.now() - mcsDate) / 86400000;
   return {
     units: carrier.powerUnits ?? 0,
     drivers: carrier.drivers ?? 0,
@@ -177,11 +174,11 @@ export const SCORING_RULES: ScoringRule[] = [
     applies: (_carrier, ctx) => hasAny(`${ctx.insuranceText} ${ctx.statusText} ${ctx.rawText}`, ['pending', 'required', 'not on file'])
   },
   {
-    id: 'MCS150_RECENT_120_DAYS',
+    id: 'MCS150_DATE_PRESENT',
     bucket: 'urgencyScore',
-    points: 12,
-    reason: 'Recent MCS-150 date',
-    applies: (_carrier, ctx) => ctx.daysSinceMcs150 !== null && ctx.daysSinceMcs150 <= 120
+    points: 8,
+    reason: 'MCS-150 date available',
+    applies: (carrier) => Boolean(carrier.mcs150Date)
   },
   {
     id: 'BAD_STATUS_SIGNAL',
