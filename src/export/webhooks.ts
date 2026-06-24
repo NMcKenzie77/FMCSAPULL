@@ -7,6 +7,9 @@ export interface LeadExportRow {
   lead_grade: string;
   lead_score: number;
   lead_status: string;
+  scoring_version: string;
+  applied_rule_ids: string[];
+  scoring_reasons: string[];
   recommended_products: string[];
   outreach_angle: string | null;
   legal_name: string | null;
@@ -40,6 +43,7 @@ export async function getTopLeads(limit = 100, minGrade = 'B'): Promise<LeadExpo
   const result = await query<LeadExportRow>(
     `select
        l.id, l.usdot_number, l.lead_grade, l.lead_score, l.lead_status,
+       l.scoring_version, l.applied_rule_ids, l.scoring_reasons,
        l.recommended_products, l.outreach_angle,
        c.legal_name, c.dba_name, c.docket_number,
        c.physical_city, c.physical_state, c.physical_zip,
