@@ -7,7 +7,7 @@ Railway-ready Node/TypeScript service that imports FMCSA / DOT DataHub records, 
 - Pulls FMCSA public data from DOT DataHub Socrata endpoints.
 - Imports new/updated trucking carrier records.
 - Normalizes USDOT, MC/docket, company name, address, phone, fleet size, driver count, cargo, authority, and insurance-related fields.
-- Scores each carrier for P&C insurance opportunity.
+- Scores each carrier for P&C insurance opportunity using a deterministic rule table.
 - Adds life/health cross-sell signals based on owner-operator/small-fleet/driver-count patterns.
 - Exposes an API for lead review and manual import.
 - Supports Railway Cron for automatic daily imports.
@@ -82,6 +82,12 @@ GET /stats
 GET /leads?limit=100&minGrade=B
 ```
 
+### Get scoring rules
+
+```http
+GET /scoring/rules
+```
+
 ### Initialize database
 
 ```http
@@ -133,6 +139,30 @@ GOOGLE_SHEETS_WEBHOOK_SECRET=
 
 ## Lead scoring summary
 
+The scoring engine is deterministic. It does not use AI. For the same normalized carrier input and the same scoring version, the same rules fire and the same score is produced every time.
+
+Rules live in:
+
+```text
+src/leads/scoringRules.ts
+```
+
+Readable scoring documentation lives in:
+
+```text
+docs/SCORING_RULES.md
+```
+
+Every lead stores these audit fields:
+
+| Field | Purpose |
+|---|---|
+| scoring_version | Shows which scoring table version ranked the lead |
+| applied_rule_ids | Exact rules that fired |
+| scoring_reasons | Human-readable explanation with point values |
+| lead_score | Final numeric score |
+| lead_grade | A+, A, B, C, or SKIP |
+
 The scoring engine prioritizes:
 
 - Active/authorized status signals.
@@ -146,13 +176,13 @@ The scoring engine prioritizes:
 
 Grades:
 
-| Grade | Meaning |
-|---|---|
-| A+ | Call first |
-| A | Strong lead |
-| B | Add to campaign |
-| C | Nurture |
-| SKIP | Low-value or bad status |
+| Grade | Minimum Score | Meaning |
+|---|---:|---|
+| A+ | 110 | Call first |
+| A | 85 | Strong lead |
+| B | 60 | Add to campaign |
+| C | 40 | Nurture |
+| SKIP | Below 40 | Low-value or bad status |
 
 ## Recommended Railway structure
 
@@ -182,5 +212,8 @@ The payload includes:
 - cargo
 - lead grade
 - lead score
+- scoring version
+- applied rule IDs
+- scoring reasons
 - recommended products
 - outreach angle
