@@ -70,14 +70,20 @@ create table if not exists insurance_leads (
   recommended_products text[] not null default '{}',
   outreach_angle text,
   scoring_reasons text[] not null default '{}',
+  scoring_version text not null default 'TRUCKING_INSURANCE_V1_2026_06_24',
+  applied_rule_ids text[] not null default '{}',
   exported_to_arkon_at timestamptz,
   exported_to_sheets_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
+alter table insurance_leads add column if not exists scoring_version text not null default 'TRUCKING_INSURANCE_V1_2026_06_24';
+alter table insurance_leads add column if not exists applied_rule_ids text[] not null default '{}';
+
 create index if not exists idx_insurance_leads_grade_score on insurance_leads (lead_grade, lead_score desc);
 create index if not exists idx_insurance_leads_status on insurance_leads (lead_status);
+create index if not exists idx_insurance_leads_scoring_version on insurance_leads (scoring_version);
 
 create table if not exists export_events (
   id bigserial primary key,
