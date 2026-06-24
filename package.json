@@ -10,7 +10,9 @@
     "start": "node dist/server.js",
     "import": "tsx src/index.ts import",
     "db:init": "tsx src/index.ts db:init",
-    "score:refresh": "tsx src/index.ts score:refresh"
+    "score:refresh": "tsx src/index.ts score:refresh",
+    "export:arkon": "tsx src/index.ts export:arkon",
+    "export:sheets": "tsx src/index.ts export:sheets"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
