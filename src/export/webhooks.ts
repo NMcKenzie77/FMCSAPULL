@@ -15,9 +15,19 @@ export interface LeadExportRow {
   legal_name: string | null;
   dba_name: string | null;
   docket_number: string | null;
+  entity_type: string | null;
+  carrier_operation: string | null;
+  authority_status: string | null;
+  usdot_status: string | null;
+  allowed_to_operate: string | null;
+  physical_street: string | null;
   physical_city: string | null;
   physical_state: string | null;
   physical_zip: string | null;
+  mailing_street: string | null;
+  mailing_city: string | null;
+  mailing_state: string | null;
+  mailing_zip: string | null;
   phone: string | null;
   email: string | null;
   power_units: number | null;
@@ -46,7 +56,10 @@ export async function getTopLeads(limit = 100, minGrade = 'B'): Promise<LeadExpo
        l.scoring_version, l.applied_rule_ids, l.scoring_reasons,
        l.recommended_products, l.outreach_angle,
        c.legal_name, c.dba_name, c.docket_number,
-       c.physical_city, c.physical_state, c.physical_zip,
+       c.entity_type, c.carrier_operation, c.authority_status,
+       c.usdot_status, c.allowed_to_operate,
+       c.physical_street, c.physical_city, c.physical_state, c.physical_zip,
+       c.mailing_street, c.mailing_city, c.mailing_state, c.mailing_zip,
        c.phone, c.email, c.power_units, c.drivers, c.cargo
      from insurance_leads l
      join fmcsa_carriers c on c.id = l.carrier_id
