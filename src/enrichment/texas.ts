@@ -12,13 +12,31 @@ function companySearchName(carrier: { legal_name: string | null; dba_name: strin
   return carrier.legal_name || carrier.dba_name || (carrier.usdot_number ? `USDOT ${carrier.usdot_number}` : null);
 }
 
-function buildTexasSearchUrl(companyName: string): string {
-  const base = config.txComptrollerApiUrl;
-  const encoded = encodeURIComponent(companyName);
-  if (base.includes('{name}')) return base.replaceAll('{name}', encoded);
-  if (base.includes('{query}')) return base.replaceAll('{query}', encoded);
-  const separator = base.includes('?') ? '&' : '?';
-  return `${base}${separator}search=${encoded}`;
+function apiBaseUrl(): string {
+  return config.txComptrollerApiBaseUrl.replace(/\/+$/, '');
+}
+
+function texasUrl(path: string, params?: Record<string, string | number | null | undefined>): string {
+  const url = new URL(`${apiBaseUrl()}${path}`);
+  for (const [key, value] of Object.entries(params ?? {})) {
+    if (value !== undefined && value !== null && String(value).trim()) {
+      url.searchParams.set(key, String(value));
+    }
+  }
+  return url.toString();
+}
+
+function headers(): HeadersInit {
+  return {
+    accept: 'application/json',
+    'x-api-key': config.txComptrollerApiKey
+  };
+}
+
+function clean(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  const text = String(value).replace(/\s+/g, ' ').trim();
+  return text.length ? text : null;
 }
 
 function extractRecords(payload: unknown): Record<string, unknown>[] {
@@ -34,28 +52,75 @@ function extractRecords(payload: unknown): Record<string, unknown>[] {
   return [record];
 }
 
+function firstString(record: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = clean(record[key]);
+    if (value) return value;
+  }
+  return null;
+}
+
+async function getJson(url: string): Promise<unknown> {
+  const response = await fetch(url, { headers: headers() });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Texas Comptroller API returned ${response.status}: ${body.slice(0, 400)}`);
+  }
+  return response.json() as Promise<unknown>;
+}
+
+async function searchFranchiseTaxList(companyName: string): Promise<Record<string, unknown>[]> {
+  const payload = await getJson(texasUrl('/franchise-tax-list', { name: companyName }));
+  return extractRecords(payload);
+}
+
+async function getFranchiseAccountDetails(taxpayerId: string): Promise<Record<string, unknown> | null> {
+  const normalized = taxpayerId.replace(/\D/g, '');
+  if (!/^\d{11}$/.test(normalized)) return null;
+  const payload = await getJson(texasUrl(`/franchise-tax/${normalized}`));
+  const records = extractRecords(payload);
+  return records[0] ?? null;
+}
+
+function mergedTexasRecord(summary: Record<string, unknown>, detail: Record<string, unknown> | null): Record<string, unknown> {
+  if (!detail) return summary;
+  return {
+    ...summary,
+    ...detail,
+    txSearchSummary: summary
+  };
+}
+
 async function searchTexasRegistry(companyName: string): Promise<TexasSearchResult> {
   if (!config.txComptrollerApiKey) {
     return { companyName, records: [], warning: 'TX_COMPTROLLER_API_KEY is not configured in Railway.' };
   }
-  if (!config.txComptrollerApiUrl) {
-    return { companyName, records: [], warning: 'TX_COMPTROLLER_API_URL is not configured in Railway.' };
-  }
 
-  const response = await fetch(buildTexasSearchUrl(companyName), {
-    headers: {
-      accept: 'application/json',
-      'x-api-key': config.txComptrollerApiKey
+  const summaries = await searchFranchiseTaxList(companyName);
+  if (!summaries.length) return { companyName, records: [] };
+
+  const records: Record<string, unknown>[] = [];
+  const warnings: string[] = [];
+
+  for (const summary of summaries.slice(0, 5)) {
+    const taxpayerId = firstString(summary, ['taxpayerId', 'taxpayerID', 'taxpayer_id', 'TAXPAYER_ID']);
+    if (!taxpayerId) {
+      records.push(summary);
+      continue;
     }
-  });
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Texas registry API returned ${response.status}: ${body.slice(0, 400)}`);
+    try {
+      const detail = await getFranchiseAccountDetails(taxpayerId);
+      records.push(mergedTexasRecord(summary, detail));
+      if (!detail) warnings.push(`Texas summary for ${companyName} returned taxpayerId ${taxpayerId}, but it was not an 11-digit detail ID.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      warnings.push(`Texas detail lookup failed for ${companyName} taxpayerId ${taxpayerId}: ${message}`);
+      records.push(summary);
+    }
   }
 
-  const payload = await response.json() as unknown;
-  return { companyName, records: extractRecords(payload) };
+  return { companyName, records, warning: warnings.length ? warnings.join(' | ') : undefined };
 }
 
 export async function enrichTexasCarriers(options: { limit?: number; usdotNumbers?: string[]; records?: Record<string, unknown>[] } = {}): Promise<EnrichmentRunResult> {
@@ -85,12 +150,9 @@ export async function enrichTexasCarriers(options: { limit?: number; usdotNumber
     }
 
     const search = await searchTexasRegistry(searchName);
-    if (search.warning) {
-      warnings.push(search.warning);
-      continue;
-    }
+    if (search.warning) warnings.push(search.warning);
     if (!search.records.length) {
-      warnings.push(`No Texas registry records returned for ${searchName}.`);
+      warnings.push(`No Texas Comptroller records returned for ${searchName}.`);
       continue;
     }
 
