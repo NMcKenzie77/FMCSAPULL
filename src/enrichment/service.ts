@@ -104,7 +104,7 @@ function isUsBased(carrier: CarrierRow, hqState: string | null): boolean {
 
 function isBadStatus(carrier: CarrierRow, parsed: ParsedRegistryRecord): boolean {
   const text = `${carrier.usdot_status ?? ''} ${carrier.allowed_to_operate ?? ''} ${carrier.authority_status ?? ''} ${parsed.entityStatus ?? ''} ${parsed.rightToTransact ?? ''}`;
-  return textIncludesAny(text, ['out-of-service', 'out of service', 'inactive', 'revoked', 'not authorized', 'not allowed', 'forfeited', 'terminated', 'suspended']);
+  return textIncludesAny(text, ['out-of-service', 'out of service', 'inactive', 'revoked', 'forfeited', 'terminated', 'suspended']);
 }
 
 function hasActiveSignal(carrier: CarrierRow, parsed: ParsedRegistryRecord): boolean {
@@ -359,9 +359,21 @@ export async function listCarrierTargetsForState(stateCode: string, limit: numbe
   }
 
   const result = await query<CarrierRow>(
-    `select * from fmcsa_carriers
-      where upper(coalesce(physical_state, mailing_state, '')) = $1
-      order by last_seen_at desc
+    `select c.* from fmcsa_carriers c
+      left join insurance_leads l on l.carrier_id = c.id
+      left join state_registry_matches m
+        on m.carrier_id = c.id
+       and m.state_code = $1
+      where upper(coalesce(c.physical_state, c.mailing_state, '')) = $1
+        and m.id is null
+      order by
+        case
+          when l.applied_rule_ids && array['INSURANCE_REQUIRED_NOT_ON_FILE','AUTHORITY_PENDING_INSURANCE_REVIEW','INSURANCE_OR_AUTHORITY_TRIGGER']::text[] then 0
+          else 1
+        end,
+        coalesce(l.urgency_score, 0) desc,
+        coalesce(l.lead_score, 0) desc,
+        c.last_seen_at desc
       limit $2`,
     [normalizedState, limit]
   );
