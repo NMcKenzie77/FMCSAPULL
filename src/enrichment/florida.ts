@@ -206,7 +206,7 @@ function titleName(value: string): string {
     AP: 'Authorized Person',
     RA: 'Registered Agent'
   };
-  return mapping[code] ?? code || value;
+  return mapping[code] ?? (code || value);
 }
 
 function parseOfficers(lines: string[]): Array<Record<string, unknown>> {
