@@ -4,9 +4,12 @@ import { initSchema, query } from './db.js';
 import { importFmcsa, refreshScores } from './importer.js';
 import { exportToArkon, exportToSheets, getTopLeads } from './export/webhooks.js';
 import { publicScoringRules } from './leads/scoringRules.js';
+import { checkSocrataDataset } from './fmcsa/socrata.js';
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
+
+const importSources: ImportSource[] = ['carrier-daily', 'carrier-all-history', 'company-census'];
 
 function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   if (!config.adminApiKey) return next();
@@ -21,6 +24,20 @@ app.get('/health', (_req, res) => {
 
 app.get('/scoring/rules', (_req, res) => {
   res.json({ ok: true, scoring: publicScoringRules() });
+});
+
+app.get('/admin/datasets/check', requireAdmin, async (req, res, next) => {
+  try {
+    const requestedSource = req.query.source ? String(req.query.source) as ImportSource : undefined;
+    const sources = requestedSource ? [requestedSource] : importSources;
+    const invalid = sources.filter((source) => !importSources.includes(source));
+    if (invalid.length) return res.status(400).json({ ok: false, error: `Invalid source: ${invalid.join(', ')}` });
+
+    const results = await Promise.all(sources.map((source) => checkSocrataDataset(source)));
+    res.json({ ok: true, results });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post('/admin/db/init', requireAdmin, async (_req, res, next) => {
