@@ -127,15 +127,15 @@ create table if not exists state_registry_sources (
 
 insert into state_registry_sources (state_code, source_name, source_type, base_url, requires_api_key, status, notes)
 values
-  ('TX', 'TX_COMPTROLLER', 'API', null, true, 'NEEDS_CONFIGURATION', 'Texas should be first enrichment adapter. Set TX_COMPTROLLER_API_KEY and TX_COMPTROLLER_API_URL in Railway.'),
-  ('FL', 'FL_SUNBIZ', 'DOWNLOAD_OR_SEARCH', 'https://search.sunbiz.org', false, 'PLANNED', 'Florida is wave 1, likely best as a download/import adapter rather than a simple live API.'),
-  ('GA', 'GA_CORPORATIONS', 'STATE_REGISTRY', null, false, 'PLANNED', 'Wave 1 commercial P&C enrichment target.'),
-  ('NC', 'NC_SECRETARY_OF_STATE', 'STATE_REGISTRY', null, false, 'PLANNED', 'Wave 1 commercial P&C enrichment target.'),
-  ('AZ', 'AZ_CORPORATION_COMMISSION', 'STATE_REGISTRY', null, false, 'PLANNED', 'Wave 1 commercial P&C enrichment target.'),
-  ('TN', 'TN_SECRETARY_OF_STATE', 'STATE_REGISTRY', null, false, 'PLANNED', 'Wave 1 commercial P&C enrichment target.')
+  ('TX', 'TX_COMPTROLLER', 'API', 'https://api.comptroller.texas.gov/public-data/v1/public', true, 'ACTIVE_WITH_KEY_REQUIRED', 'Set TX_COMPTROLLER_API_KEY in Railway. The adapter searches /franchise-tax-list by name, then fetches /franchise-tax/{taxpayerId} for registered office and officer details.'),
+  ('FL', 'FL_SUNBIZ', 'DOWNLOAD_OR_SEARCH', 'https://sftp.floridados.gov', false, 'PLANNED', 'Florida Sunbiz provides public daily and quarterly downloads. Build a download/import adapter rather than a simple live API.'),
+  ('GA', 'GA_CORPORATIONS', 'STATE_REGISTRY_SEARCH', 'https://ecorp.sos.ga.gov/BusinessSearch', false, 'PLANNED', 'Georgia Corporations Division search is official; no public API key is configured yet.'),
+  ('NC', 'NC_SECRETARY_OF_STATE', 'STATE_REGISTRY_SEARCH', 'https://www.sosnc.gov/online_services/search/by_title/_Business_Registration', false, 'PLANNED', 'North Carolina Secretary of State search is official; no public API key is configured yet.'),
+  ('AZ', 'AZ_CORPORATION_COMMISSION', 'STATE_REGISTRY_SEARCH', 'https://arizonabusinesscenter.azcc.gov/EntitySearch/Index', false, 'PLANNED', 'Arizona Corporation Commission eCorp search is official; no public API key is configured yet.'),
+  ('TN', 'TN_SECRETARY_OF_STATE', 'STATE_REGISTRY_SEARCH', 'https://tnbear.tn.gov/Ecommerce/FilingSearch.aspx', false, 'PLANNED', 'Tennessee business information search is official; no public API key is configured yet.')
 on conflict (state_code, source_name) do update set
   source_type = excluded.source_type,
-  base_url = coalesce(state_registry_sources.base_url, excluded.base_url),
+  base_url = excluded.base_url,
   requires_api_key = excluded.requires_api_key,
   status = excluded.status,
   notes = excluded.notes,
