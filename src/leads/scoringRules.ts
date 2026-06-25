@@ -28,7 +28,7 @@ export interface GradeBand {
   minScore: number;
 }
 
-export const SCORING_VERSION = 'COMMERCIAL_PNC_V1_2026_06_25';
+export const SCORING_VERSION = 'COMMERCIAL_PNC_V1_2026_06_25B';
 
 export const GRADE_BANDS: GradeBand[] = [
   { grade: 'A+', minScore: 120 },
@@ -37,6 +37,12 @@ export const GRADE_BANDS: GradeBand[] = [
   { grade: 'C', minScore: 40 },
   { grade: 'SKIP', minScore: -9999 }
 ];
+
+const US_STATES = new Set([
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 'IN', 'KS', 'KY',
+  'LA', 'MA', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ', 'NM', 'NV', 'NY',
+  'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VA', 'VT', 'WA', 'WI', 'WV', 'WY', 'DC'
+]);
 
 const WAVE_1_STATES = new Set(['TX', 'FL', 'GA', 'NC', 'AZ', 'TN']);
 const WAVE_2_STATES = new Set(['OH', 'PA', 'NJ', 'IL', 'MI', 'SC']);
@@ -124,6 +130,22 @@ export const SCORING_RULES: ScoringRule[] = [
     points: 6,
     reason: 'Physical city/state available',
     applies: (carrier) => Boolean(carrier.physicalState && carrier.physicalCity && !carrier.physicalStreet)
+  },
+  {
+    id: 'POWER_UNITS_26_TO_99',
+    bucket: 'commercialPncScore',
+    points: 40,
+    reason: '26-99 power units: larger fleet with stronger commercial auto and umbrella premium potential',
+    products: ['Commercial Auto', 'Umbrella / Excess', 'Workers Comp'],
+    applies: (_carrier, ctx) => ctx.units >= 26 && ctx.units <= 99
+  },
+  {
+    id: 'POWER_UNITS_100_PLUS',
+    bucket: 'commercialPncScore',
+    points: 35,
+    reason: '100+ power units: enterprise fleet opportunity requiring separate appetite/market review',
+    products: ['Commercial Auto', 'Umbrella / Excess', 'Workers Comp'],
+    applies: (_carrier, ctx) => ctx.units >= 100
   },
   {
     id: 'POWER_UNITS_6_TO_25',
@@ -222,6 +244,13 @@ export const SCORING_RULES: ScoringRule[] = [
     points: 8,
     reason: 'MCS-150 date available',
     applies: (carrier) => Boolean(carrier.mcs150Date)
+  },
+  {
+    id: 'NON_US_REGISTRY_OR_BASE',
+    bucket: 'riskAdjustment',
+    points: -65,
+    reason: 'Non-U.S. base/state should be excluded from first U.S. commercial P&C campaign',
+    applies: (_carrier, ctx) => Boolean(ctx.state) && !US_STATES.has(ctx.state)
   },
   {
     id: 'LIVERY_PASSENGER_SEPARATE_CAMPAIGN',
