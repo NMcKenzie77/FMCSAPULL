@@ -28,7 +28,7 @@ export interface GradeBand {
   minScore: number;
 }
 
-export const SCORING_VERSION = 'COMMERCIAL_PNC_V1_2026_06_25B';
+export const SCORING_VERSION = 'COMMERCIAL_PNC_V1_2026_06_25C';
 
 export const GRADE_BANDS: GradeBand[] = [
   { grade: 'A+', minScore: 120 },
@@ -50,6 +50,66 @@ const WAVE_3_STATES = new Set(['CA', 'NY', 'MA', 'WA', 'CO', 'VA']);
 
 function hasAny(haystack: string, needles: string[]): boolean {
   return needles.some((needle) => haystack.includes(needle));
+}
+
+function fieldText(source: Record<string, unknown>, keys: string[]): string {
+  return keys
+    .map((key) => source[key])
+    .filter((value) => value !== undefined && value !== null && String(value).trim() !== '')
+    .map((value) => String(value).trim().toLowerCase())
+    .join(' ');
+}
+
+function fieldIndicatesYes(source: Record<string, unknown>, keys: string[]): boolean {
+  const text = fieldText(source, keys);
+  return /\b(y|yes|true|t|1|required|requirement|required on file)\b/.test(text);
+}
+
+function fieldIndicatesNo(source: Record<string, unknown>, keys: string[]): boolean {
+  const text = fieldText(source, keys);
+  return /\b(n|no|false|f|0|none|not on file|missing|cancelled|canceled|expired|lapsed)\b/.test(text);
+}
+
+function forHirePropertySignal(ctx: RuleContext): boolean {
+  return hasAny(ctx.operationText, ['for hire', 'for-hire', 'property', 'common', 'contract']) && !hasAny(ctx.operationText, ['passenger only']);
+}
+
+function insuranceRequiredButNotOnFile(carrier: NormalizedCarrier, ctx: RuleContext): boolean {
+  const insurance = carrier.insuranceOnFile ?? {};
+  const text = `${ctx.insuranceText} ${ctx.statusText} ${ctx.rawText}`;
+
+  const bipdRequired = fieldIndicatesYes(insurance, ['bipd_required', 'insurance_required']);
+  const bipdMissing = fieldIndicatesNo(insurance, ['bipd_on_file', 'bipd_file', 'insurance_on_file']);
+  const cargoRequired = fieldIndicatesYes(insurance, ['cargo_required']);
+  const cargoMissing = fieldIndicatesNo(insurance, ['cargo_on_file', 'cargo_file']);
+  const bondRequired = fieldIndicatesYes(insurance, ['bond_required']);
+  const bondMissing = fieldIndicatesNo(insurance, ['bond_on_file']);
+
+  return (
+    (bipdRequired && bipdMissing) ||
+    (cargoRequired && cargoMissing) ||
+    (bondRequired && bondMissing) ||
+    hasAny(text, ['not on file', 'insurance required', 'insurance pending', 'insurance missing', 'filing missing', 'bmc-91 missing', 'bmc91 missing'])
+  );
+}
+
+function authorityPendingInsuranceReview(ctx: RuleContext): boolean {
+  const text = `${ctx.statusText} ${ctx.rawText}`;
+  return hasAny(text, [
+    'pending',
+    'application pending',
+    'authority pending',
+    'not authorized',
+    'not allowed',
+    'insurance required',
+    'insurance pending',
+    'awaiting insurance',
+    'waiting for insurance'
+  ]);
+}
+
+function hardInactiveStatus(ctx: RuleContext): boolean {
+  return hasAny(ctx.statusText, ['out-of-service', 'out of service', 'inactive', 'revoked', 'forfeited', 'terminated', 'suspended']);
 }
 
 export function buildRuleContext(carrier: NormalizedCarrier): RuleContext {
@@ -101,7 +161,7 @@ export const SCORING_RULES: ScoringRule[] = [
     points: 25,
     reason: 'For-hire/property carrier signal',
     products: ['Commercial Auto', 'Motor Truck Cargo'],
-    applies: (_carrier, ctx) => hasAny(ctx.operationText, ['for hire', 'for-hire', 'property', 'common', 'contract']) && !hasAny(ctx.operationText, ['passenger only'])
+    applies: (_carrier, ctx) => forHirePropertySignal(ctx)
   },
   {
     id: 'CONTACT_PHONE_PRESENT',
@@ -231,6 +291,22 @@ export const SCORING_RULES: ScoringRule[] = [
     applies: (carrier) => Boolean(carrier.docketNumber)
   },
   {
+    id: 'INSURANCE_REQUIRED_NOT_ON_FILE',
+    bucket: 'urgencyScore',
+    points: 50,
+    reason: 'Insurance appears required but filing is missing/not on file',
+    products: ['Commercial Auto', 'Motor Truck Cargo'],
+    applies: (carrier, ctx) => insuranceRequiredButNotOnFile(carrier, ctx)
+  },
+  {
+    id: 'AUTHORITY_PENDING_INSURANCE_REVIEW',
+    bucket: 'urgencyScore',
+    points: 35,
+    reason: 'Authority/pending status suggests insurance review may unblock activation',
+    products: ['Commercial Auto'],
+    applies: (carrier, ctx) => forHirePropertySignal(ctx) && authorityPendingInsuranceReview(ctx) && !hardInactiveStatus(ctx)
+  },
+  {
     id: 'INSURANCE_OR_AUTHORITY_TRIGGER',
     bucket: 'urgencyScore',
     points: 20,
@@ -263,9 +339,9 @@ export const SCORING_RULES: ScoringRule[] = [
   {
     id: 'BAD_STATUS_SIGNAL',
     bucket: 'riskAdjustment',
-    points: -45,
-    reason: 'Inactive/revoked/not authorized/out-of-service status signal',
-    applies: (_carrier, ctx) => hasAny(ctx.statusText, ['out-of-service', 'out of service', 'inactive', 'revoked', 'not authorized', 'not allowed'])
+    points: -60,
+    reason: 'Inactive/revoked/out-of-service status signal',
+    applies: (_carrier, ctx) => hardInactiveStatus(ctx)
   },
   {
     id: 'BROKER_ONLY_NO_TRUCKS',
