@@ -5,9 +5,11 @@ export type ScoreBucket = 'commercialPncScore' | 'lifeHealthScore' | 'urgencySco
 export interface RuleContext {
   units: number;
   drivers: number;
+  state: string;
   cargo: string;
   statusText: string;
   operationText: string;
+  companyText: string;
   rawText: string;
   insuranceText: string;
 }
@@ -26,15 +28,19 @@ export interface GradeBand {
   minScore: number;
 }
 
-export const SCORING_VERSION = 'TRUCKING_INSURANCE_V1_2026_06_24';
+export const SCORING_VERSION = 'COMMERCIAL_PNC_V1_2026_06_25';
 
 export const GRADE_BANDS: GradeBand[] = [
-  { grade: 'A+', minScore: 110 },
-  { grade: 'A', minScore: 85 },
+  { grade: 'A+', minScore: 120 },
+  { grade: 'A', minScore: 90 },
   { grade: 'B', minScore: 60 },
   { grade: 'C', minScore: 40 },
   { grade: 'SKIP', minScore: -9999 }
 ];
+
+const WAVE_1_STATES = new Set(['TX', 'FL', 'GA', 'NC', 'AZ', 'TN']);
+const WAVE_2_STATES = new Set(['OH', 'PA', 'NJ', 'IL', 'MI', 'SC']);
+const WAVE_3_STATES = new Set(['CA', 'NY', 'MA', 'WA', 'CO', 'VA']);
 
 function hasAny(haystack: string, needles: string[]): boolean {
   return needles.some((needle) => haystack.includes(needle));
@@ -44,15 +50,38 @@ export function buildRuleContext(carrier: NormalizedCarrier): RuleContext {
   return {
     units: carrier.powerUnits ?? 0,
     drivers: carrier.drivers ?? 0,
+    state: (carrier.physicalState ?? carrier.mailingState ?? '').toUpperCase(),
     cargo: carrier.cargo.join(' ').toLowerCase(),
     statusText: `${carrier.usdotStatus ?? ''} ${carrier.allowedToOperate ?? ''} ${carrier.authorityStatus ?? ''}`.toLowerCase(),
     operationText: `${carrier.carrierOperation ?? ''} ${carrier.entityType ?? ''} ${carrier.raw.authority_type ?? ''} ${carrier.raw.authority ?? ''}`.toLowerCase(),
+    companyText: `${carrier.legalName ?? ''} ${carrier.dbaName ?? ''}`.toLowerCase(),
     rawText: JSON.stringify(carrier.raw ?? {}).toLowerCase(),
     insuranceText: JSON.stringify(carrier.insuranceOnFile ?? {}).toLowerCase()
   };
 }
 
 export const SCORING_RULES: ScoringRule[] = [
+  {
+    id: 'STATE_PRIORITY_WAVE_1',
+    bucket: 'commercialPncScore',
+    points: 12,
+    reason: 'Wave 1 commercial P&C target state',
+    applies: (_carrier, ctx) => WAVE_1_STATES.has(ctx.state)
+  },
+  {
+    id: 'STATE_PRIORITY_WAVE_2',
+    bucket: 'commercialPncScore',
+    points: 6,
+    reason: 'Wave 2 commercial P&C target state',
+    applies: (_carrier, ctx) => WAVE_2_STATES.has(ctx.state)
+  },
+  {
+    id: 'STATE_PRIORITY_WAVE_3',
+    bucket: 'commercialPncScore',
+    points: 3,
+    reason: 'Wave 3 commercial P&C target state',
+    applies: (_carrier, ctx) => WAVE_3_STATES.has(ctx.state)
+  },
   {
     id: 'STATUS_ACTIVE_AUTHORIZED',
     bucket: 'commercialPncScore',
@@ -76,17 +105,31 @@ export const SCORING_RULES: ScoringRule[] = [
     applies: (carrier) => Boolean(carrier.phone)
   },
   {
+    id: 'CONTACT_EMAIL_PRESENT',
+    bucket: 'commercialPncScore',
+    points: 5,
+    reason: 'Company email available',
+    applies: (carrier) => Boolean(carrier.email)
+  },
+  {
+    id: 'FULL_PHYSICAL_ADDRESS_PRESENT',
+    bucket: 'commercialPncScore',
+    points: 12,
+    reason: 'Full physical base address available',
+    applies: (carrier) => Boolean(carrier.physicalStreet && carrier.physicalCity && carrier.physicalState && carrier.physicalZip)
+  },
+  {
     id: 'ADDRESS_CITY_STATE_PRESENT',
     bucket: 'commercialPncScore',
-    points: 10,
-    reason: 'Physical address available',
-    applies: (carrier) => Boolean(carrier.physicalState && carrier.physicalCity)
+    points: 6,
+    reason: 'Physical city/state available',
+    applies: (carrier) => Boolean(carrier.physicalState && carrier.physicalCity && !carrier.physicalStreet)
   },
   {
     id: 'POWER_UNITS_6_TO_25',
     bucket: 'commercialPncScore',
     points: 30,
-    reason: '6-25 power units: strong commercial P&C premium potential',
+    reason: '6-25 power units: strong commercial auto premium potential',
     applies: (_carrier, ctx) => ctx.units >= 6 && ctx.units <= 25
   },
   {
@@ -181,6 +224,14 @@ export const SCORING_RULES: ScoringRule[] = [
     applies: (carrier) => Boolean(carrier.mcs150Date)
   },
   {
+    id: 'LIVERY_PASSENGER_SEPARATE_CAMPAIGN',
+    bucket: 'riskAdjustment',
+    points: -35,
+    reason: 'Passenger/livery account should be handled in a separate commercial auto campaign',
+    products: ['Livery / Commercial Auto'],
+    applies: (_carrier, ctx) => hasAny(`${ctx.companyText} ${ctx.operationText}`, ['limo', 'limousine', 'passenger', 'taxi', 'bus', 'shuttle', 'chauffeur'])
+  },
+  {
     id: 'BAD_STATUS_SIGNAL',
     bucket: 'riskAdjustment',
     points: -45,
@@ -201,6 +252,7 @@ export const DEFAULT_PRODUCT_RULES = [
   { id: 'DEFAULT_PHYSICAL_DAMAGE', product: 'Physical Damage', applies: (_carrier: NormalizedCarrier, ctx: RuleContext) => ctx.units > 0 },
   { id: 'DEFAULT_UMBRELLA_EXCESS', product: 'Umbrella / Excess', applies: (_carrier: NormalizedCarrier, ctx: RuleContext) => ctx.units > 1 },
   { id: 'DEFAULT_OCC_ACC', product: 'Occupational Accident', applies: (_carrier: NormalizedCarrier, ctx: RuleContext) => ctx.drivers > 0 },
+  { id: 'DEFAULT_WORKERS_COMP', product: 'Workers Comp', applies: (_carrier: NormalizedCarrier, ctx: RuleContext) => ctx.drivers >= 3 },
   { id: 'DEFAULT_KEY_PERSON', product: 'Key Person Life', applies: (_carrier: NormalizedCarrier, ctx: RuleContext) => ctx.units >= 3 || ctx.drivers >= 3 }
 ];
 
