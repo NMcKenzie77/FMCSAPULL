@@ -128,7 +128,7 @@ create table if not exists state_registry_sources (
 insert into state_registry_sources (state_code, source_name, source_type, base_url, requires_api_key, status, notes)
 values
   ('TX', 'TX_COMPTROLLER', 'API', 'https://api.comptroller.texas.gov/public-data/v1/public', true, 'ACTIVE_WITH_KEY_REQUIRED', 'Set TX_COMPTROLLER_API_KEY in Railway. The adapter searches /franchise-tax-list by name, then fetches /franchise-tax/{taxpayerId} for registered office and officer details.'),
-  ('FL', 'FL_SUNBIZ', 'DOWNLOAD_OR_SEARCH', 'https://sftp.floridados.gov', false, 'PLANNED', 'Florida Sunbiz provides public daily and quarterly downloads. Build a download/import adapter rather than a simple live API.'),
+  ('FL', 'FL_SUNBIZ', 'STATE_REGISTRY_SEARCH', 'https://search.sunbiz.org/Inquiry/CorporationSearch/ByName', false, 'ACTIVE', 'Florida Sunbiz search adapter enriches Florida FMCSA targets by entity name and parses document number, status, principal address, registered agent, and officer/director detail.'),
   ('GA', 'GA_CORPORATIONS', 'STATE_REGISTRY_SEARCH', 'https://ecorp.sos.ga.gov/BusinessSearch', false, 'PLANNED', 'Georgia Corporations Division search is official; no public API key is configured yet.'),
   ('NC', 'NC_SECRETARY_OF_STATE', 'STATE_REGISTRY_SEARCH', 'https://www.sosnc.gov/online_services/search/by_title/_Business_Registration', false, 'PLANNED', 'North Carolina Secretary of State search is official; no public API key is configured yet.'),
   ('AZ', 'AZ_CORPORATION_COMMISSION', 'STATE_REGISTRY_SEARCH', 'https://arizonabusinesscenter.azcc.gov/EntitySearch/Index', false, 'PLANNED', 'Arizona Corporation Commission eCorp search is official; no public API key is configured yet.'),
