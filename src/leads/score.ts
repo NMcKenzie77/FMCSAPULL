@@ -43,7 +43,7 @@ export function scoreCarrier(carrier: NormalizedCarrier): LeadScore {
   const leadScore = totals.commercialPncScore + totals.lifeHealthScore + totals.urgencyScore + totals.riskAdjustment;
   const leadGrade = GRADE_BANDS.find((band) => leadScore >= band.minScore)?.grade ?? 'SKIP';
   const company = carrier.dbaName || carrier.legalName || `USDOT ${carrier.usdotNumber}`;
-  const outreachAngle = `${company} looks like a trucking P&C lead with ${ctx.units || 'unknown'} power units and ${ctx.drivers || 'unknown'} drivers. Lead with commercial auto, cargo/physical damage, then cross-sell owner protection, occupational accident, workers comp, key person, or benefits based on driver count.`;
+  const outreachAngle = `${company} looks like a commercial P&C lead with ${ctx.units || 'unknown'} power units, ${ctx.drivers || 'unknown'} drivers, and ${ctx.state || 'unknown'} operating state. Lead with commercial auto and liability exposure, then qualify workers comp, umbrella/excess, property, cargo/physical damage, key person, benefits, or owner protection based on operations and employee count.`;
 
   return {
     leadGrade,
