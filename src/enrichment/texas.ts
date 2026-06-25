@@ -149,14 +149,14 @@ function scoreTexasSummary(record: Record<string, unknown>, companyName: string,
   const name = normalizeComparableName(recordName(record) ?? '');
   let score = 0;
 
-  if (name === company) score += 100;
+  if (name === company) score += 150;
   if (baseCompany && name === baseCompany) score += 70;
-  if (baseCompany && name.startsWith(`${baseCompany} `)) score += 55;
-  if (baseCompany && name.includes(baseCompany)) score += 35;
+  if (baseCompany && name.startsWith(`${baseCompany} `)) score += 45;
+  if (baseCompany && name.includes(baseCompany)) score += 25;
 
   const candidateZip = (recordZip(record) ?? '').slice(0, 5);
   const carrierZips = [carrier?.physical_zip, carrier?.mailing_zip].map((item) => (item ?? '').slice(0, 5)).filter(Boolean);
-  if (candidateZip && carrierZips.includes(candidateZip)) score += 30;
+  if (candidateZip && carrierZips.includes(candidateZip)) score += 75;
 
   if (/\bACTIVE\b/i.test(String(record['rightToTransactTX'] ?? record['entityStatus'] ?? ''))) score += 5;
   return score;
@@ -205,12 +205,11 @@ async function searchTexasRegistry(companyName: string, carrier?: CarrierSearchT
     searched.push(variant);
     const summaries = await searchFranchiseTaxList(variant);
     for (const summary of summaries) summariesByKey.set(recordKey(summary), summary);
-    if (summariesByKey.size) break;
   }
 
   const summaries = Array.from(summariesByKey.values())
     .sort((a, b) => scoreTexasSummary(b, companyName, carrier) - scoreTexasSummary(a, companyName, carrier))
-    .slice(0, 3);
+    .slice(0, 1);
 
   if (!summaries.length) return { companyName, records: [], warning: `No Texas records found after trying: ${searched.join(' | ')}` };
 
