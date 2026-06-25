@@ -83,7 +83,7 @@ function rankTitle(title: string | null, source: string): { confidence: number; 
 
 function findCandidateObjects(value: unknown, keyHint = '', output: Record<string, unknown>[] = []): Record<string, unknown>[] {
   if (Array.isArray(value)) {
-    const usefulArray = /(officer|director|govern|member|manager|partner|principal|person|contact)/i.test(keyHint);
+    const usefulArray = /(officer|director|govern|member|manager|partner|principal|person|contact|agent)/i.test(keyHint);
     for (const item of value) {
       if (item && typeof item === 'object' && !Array.isArray(item)) {
         if (usefulArray) output.push(item as Record<string, unknown>);
@@ -103,12 +103,14 @@ function parseOfficerObject(raw: Record<string, unknown>, source: string): Parse
   const flat = flattenRecord(raw);
   const name = getFirst(flat, [
     'name', 'person_name', 'personName', 'officer_name', 'officerName', 'governing_person_name',
-    'governingPersonName', 'manager_name', 'member_name', 'principal_name', 'full_name', 'fullName'
+    'governingPersonName', 'manager_name', 'member_name', 'principal_name', 'full_name', 'fullName',
+    'AGNT_NM', 'agnt_nm', 'agntName', 'agent_name', 'agentName'
   ]);
   if (!name || isLikelyServiceCompany(name)) return null;
   const title = getFirst(flat, [
     'title', 'office', 'role', 'position', 'capacity', 'officer_title', 'officerTitle',
-    'governing_person_title', 'governingPersonTitle', 'relationship'
+    'governing_person_title', 'governingPersonTitle', 'relationship',
+    'AGNT_TITL_TX', 'agnt_titl_tx', 'agntTitle', 'agent_title', 'agentTitle'
   ]);
   const ranked = rankTitle(title, source);
   return { name, title, source, confidence: ranked.confidence, priorityRank: ranked.priorityRank, raw };
@@ -129,31 +131,35 @@ function uniqueOfficers(officers: ParsedRegistryOfficer[]): ParsedRegistryOffice
 export function parseRegistryRecord(raw: Record<string, unknown>): ParsedRegistryRecord {
   const flat = flattenRecord(raw);
   const officeStreet = getFirst(flat, [
-    'registered_office_street', 'registeredOfficeStreet', 'registered_address_street', 'registeredAddressStreet',
-    'principal_office_street', 'principalOfficeStreet', 'office_address_street', 'officeAddressStreet',
-    'registered_office_address1', 'registeredOfficeAddress1', 'address1', 'street', 'street_address'
+    'registered_office_street', 'registeredOfficeStreet', 'registered_office_address_street', 'registeredOfficeAddressStreet',
+    'registered_address_street', 'registeredAddressStreet', 'principal_office_street', 'principalOfficeStreet',
+    'office_address_street', 'officeAddressStreet', 'registered_office_address1', 'registeredOfficeAddress1',
+    'mailing_address_street', 'mailingAddressStreet', 'address1', 'street', 'street_address'
   ]);
   const officeCity = getFirst(flat, [
-    'registered_office_city', 'registeredOfficeCity', 'registered_address_city', 'registeredAddressCity',
-    'principal_office_city', 'principalOfficeCity', 'office_city', 'city'
+    'registered_office_city', 'registeredOfficeCity', 'registered_office_address_city', 'registeredOfficeAddressCity',
+    'registered_address_city', 'registeredAddressCity', 'principal_office_city', 'principalOfficeCity',
+    'office_city', 'mailing_address_city', 'mailingAddressCity', 'city'
   ]);
   const officeState = getFirst(flat, [
-    'registered_office_state', 'registeredOfficeState', 'registered_address_state', 'registeredAddressState',
-    'principal_office_state', 'principalOfficeState', 'office_state', 'state'
+    'registered_office_state', 'registeredOfficeState', 'registered_office_address_state', 'registeredOfficeAddressState',
+    'registered_address_state', 'registeredAddressState', 'principal_office_state', 'principalOfficeState',
+    'office_state', 'mailing_address_state', 'mailingAddressState', 'state'
   ]);
   const officeZip = getFirst(flat, [
-    'registered_office_zip', 'registeredOfficeZip', 'registered_address_zip', 'registeredAddressZip',
-    'principal_office_zip', 'principalOfficeZip', 'office_zip', 'zip', 'postal_code', 'postalCode'
+    'registered_office_zip', 'registeredOfficeZip', 'registered_office_address_zip', 'registeredOfficeAddressZip',
+    'registered_address_zip', 'registeredAddressZip', 'principal_office_zip', 'principalOfficeZip',
+    'office_zip', 'mailing_address_zip', 'mailingAddressZip', 'zip', 'postal_code', 'postalCode'
   ]);
   const agentName = getFirst(flat, [
     'registered_agent_name', 'registeredAgentName', 'agent_name', 'agentName', 'registered_agent',
     'registeredAgent', 'ra_name', 'raName'
   ]);
   const registeredAgentAddress = buildAddress([
-    getFirst(flat, ['registered_agent_street', 'registeredAgentStreet', 'agent_street', 'agentStreet', 'ra_street', 'raStreet']),
-    getFirst(flat, ['registered_agent_city', 'registeredAgentCity', 'agent_city', 'agentCity', 'ra_city', 'raCity']),
-    getFirst(flat, ['registered_agent_state', 'registeredAgentState', 'agent_state', 'agentState', 'ra_state', 'raState']),
-    getFirst(flat, ['registered_agent_zip', 'registeredAgentZip', 'agent_zip', 'agentZip', 'ra_zip', 'raZip'])
+    getFirst(flat, ['registered_agent_street', 'registeredAgentStreet', 'agent_street', 'agentStreet', 'ra_street', 'raStreet', 'registeredOfficeAddressStreet']),
+    getFirst(flat, ['registered_agent_city', 'registeredAgentCity', 'agent_city', 'agentCity', 'ra_city', 'raCity', 'registeredOfficeAddressCity']),
+    getFirst(flat, ['registered_agent_state', 'registeredAgentState', 'agent_state', 'agentState', 'ra_state', 'raState', 'registeredOfficeAddressState']),
+    getFirst(flat, ['registered_agent_zip', 'registeredAgentZip', 'agent_zip', 'agentZip', 'ra_zip', 'raZip', 'registeredOfficeAddressZip'])
   ]);
 
   const directOfficer = parseOfficerObject(raw, 'registry_officer');
@@ -176,10 +182,13 @@ export function parseRegistryRecord(raw: Record<string, unknown>): ParsedRegistr
   }
 
   return {
-    matchedName: getFirst(flat, ['legal_name', 'legalName', 'taxpayer_name', 'taxpayerName', 'entity_name', 'entityName', 'name', 'business_name', 'businessName']),
-    entityId: getFirst(flat, ['entity_id', 'entityId', 'taxpayer_number', 'taxpayerNumber', 'file_number', 'fileNumber', 'sos_number', 'sosNumber']),
-    entityStatus: getFirst(flat, ['status', 'entity_status', 'entityStatus', 'sos_status', 'sosStatus', 'taxpayer_status', 'taxpayerStatus']),
-    rightToTransact: getFirst(flat, ['right_to_transact', 'rightToTransact', 'franchise_tax_eligibility', 'franchiseTaxEligibility', 'active_right_to_transact']),
+    matchedName: getFirst(flat, ['legal_name', 'legalName', 'taxpayer_name', 'taxpayerName', 'entity_name', 'entityName', 'name', 'business_name', 'businessName', 'dbaName']),
+    entityId: getFirst(flat, [
+      'entity_id', 'entityId', 'taxpayer_number', 'taxpayerNumber', 'taxpayer_id', 'taxpayerId', 'TAXPAYER_ID',
+      'tax_id', 'taxId', 'file_number', 'fileNumber', 'sos_number', 'sosNumber', 'sos_file_number', 'sosFileNumber'
+    ]),
+    entityStatus: getFirst(flat, ['status', 'entity_status', 'entityStatus', 'sos_status', 'sosStatus', 'taxpayer_status', 'taxpayerStatus', 'sos_registration_status', 'sosRegistrationStatus']),
+    rightToTransact: getFirst(flat, ['right_to_transact', 'rightToTransact', 'right_to_transact_tx', 'rightToTransactTX', 'franchise_tax_eligibility', 'franchiseTaxEligibility', 'active_right_to_transact']),
     registeredOfficeStreet: officeStreet,
     registeredOfficeCity: officeCity,
     registeredOfficeState: officeState,
