@@ -5,6 +5,7 @@ import { importFmcsa, refreshScores } from './importer.js';
 import { exportToArkon, exportToSheets, getTopLeads } from './export/webhooks.js';
 import { publicScoringRules } from './leads/scoringRules.js';
 import { checkSocrataDataset } from './fmcsa/socrata.js';
+import { enrichFloridaCarriers } from './enrichment/florida.js';
 import { enrichTexasCarriers } from './enrichment/texas.js';
 import { getEnrichmentSources, ingestStateRegistryRecords } from './enrichment/service.js';
 import type { StateRegistryRecordInput } from './enrichment/registryTypes.js';
@@ -132,6 +133,20 @@ app.post('/admin/enrich/texas', requireAdmin, async (req, res, next) => {
     const limit = Number.parseInt(String(req.body?.limit ?? config.texasEnrichmentLimit), 10);
     const result = await enrichTexasCarriers({
       limit: Number.isFinite(limit) ? limit : config.texasEnrichmentLimit,
+      usdotNumbers: stringArray(req.body?.usdotNumbers ?? req.body?.usdotNumber),
+      records: Array.isArray(req.body?.records) ? req.body.records : undefined
+    });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/admin/enrich/fl', requireAdmin, async (req, res, next) => {
+  try {
+    const limit = Number.parseInt(String(req.body?.limit ?? 25), 10);
+    const result = await enrichFloridaCarriers({
+      limit: Number.isFinite(limit) ? limit : 25,
       usdotNumbers: stringArray(req.body?.usdotNumbers ?? req.body?.usdotNumber),
       records: Array.isArray(req.body?.records) ? req.body.records : undefined
     });
