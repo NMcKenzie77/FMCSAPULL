@@ -61,11 +61,13 @@ async function searchTexasRegistry(companyName: string): Promise<TexasSearchResu
 export async function enrichTexasCarriers(options: { limit?: number; usdotNumbers?: string[]; records?: Record<string, unknown>[] } = {}): Promise<EnrichmentRunResult> {
   const sourceName = 'TX_COMPTROLLER';
   const directRecords = options.records ?? [];
+  const singleUsdot = options.usdotNumbers?.length === 1 ? options.usdotNumbers[0] : null;
   if (directRecords.length) {
     return ingestStateRegistryRecords(directRecords.map((raw): StateRegistryRecordInput => ({
       stateCode: 'TX',
       sourceName,
       searchName: null,
+      usdotNumber: singleUsdot,
       raw
     })));
   }
