@@ -27,7 +27,10 @@ export const config = {
   arkonWebhookUrl: process.env.ARKON_WEBHOOK_URL ?? '',
   arkonWebhookSecret: process.env.ARKON_WEBHOOK_SECRET ?? '',
   googleSheetsWebhookUrl: process.env.GOOGLE_SHEETS_WEBHOOK_URL ?? '',
-  googleSheetsWebhookSecret: process.env.GOOGLE_SHEETS_WEBHOOK_SECRET ?? ''
+  googleSheetsWebhookSecret: process.env.GOOGLE_SHEETS_WEBHOOK_SECRET ?? '',
+  txComptrollerApiKey: process.env.TX_COMPTROLLER_API_KEY ?? '',
+  txComptrollerApiUrl: process.env.TX_COMPTROLLER_API_URL ?? '',
+  texasEnrichmentLimit: intEnv('TX_ENRICHMENT_LIMIT', 25)
 };
 
 export function requireDatabaseUrl(): string {

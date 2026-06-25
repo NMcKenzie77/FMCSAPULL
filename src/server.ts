@@ -5,6 +5,9 @@ import { importFmcsa, refreshScores } from './importer.js';
 import { exportToArkon, exportToSheets, getTopLeads } from './export/webhooks.js';
 import { publicScoringRules } from './leads/scoringRules.js';
 import { checkSocrataDataset } from './fmcsa/socrata.js';
+import { enrichTexasCarriers } from './enrichment/texas.js';
+import { getEnrichmentSources, ingestStateRegistryRecords } from './enrichment/service.js';
+import type { StateRegistryRecordInput } from './enrichment/registryTypes.js';
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
@@ -16,6 +19,36 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
   const provided = req.header('x-admin-api-key') || req.query.adminApiKey;
   if (provided !== config.adminApiKey) return res.status(401).json({ ok: false, error: 'Unauthorized' });
   return next();
+}
+
+function boolQuery(value: unknown): boolean {
+  return ['true', '1', 'yes', 'y'].includes(String(value ?? '').trim().toLowerCase());
+}
+
+function stringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  if (typeof value === 'string') return value.split(',').map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
+function registryInputsFromBody(body: unknown): StateRegistryRecordInput[] {
+  if (!body || typeof body !== 'object') return [];
+  const payload = body as Record<string, unknown>;
+  const stateCode = String(payload.stateCode ?? payload.state ?? '').trim().toUpperCase();
+  const sourceName = String(payload.sourceName ?? payload.source ?? 'STATE_REGISTRY').trim();
+  const recordsValue = Array.isArray(payload.records) ? payload.records : payload.record ? [payload.record] : [];
+
+  return recordsValue
+    .filter((record): record is Record<string, unknown> => Boolean(record && typeof record === 'object' && !Array.isArray(record)))
+    .map((raw) => ({
+      stateCode,
+      sourceName,
+      searchName: payload.searchName ? String(payload.searchName) : null,
+      carrierId: payload.carrierId ? Number(payload.carrierId) : null,
+      usdotNumber: payload.usdotNumber ? String(payload.usdotNumber) : null,
+      legalName: payload.legalName ? String(payload.legalName) : null,
+      raw
+    }));
 }
 
 app.get('/health', (_req, res) => {
@@ -69,12 +102,52 @@ app.post('/admin/score/refresh', requireAdmin, async (_req, res, next) => {
   }
 });
 
+app.get('/admin/enrichment/sources', requireAdmin, async (_req, res, next) => {
+  try {
+    const sources = await getEnrichmentSources();
+    res.json({ ok: true, sources });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/admin/enrich/state-records', requireAdmin, async (req, res, next) => {
+  try {
+    const records = registryInputsFromBody(req.body);
+    if (!records.length) {
+      return res.status(400).json({ ok: false, error: 'Provide stateCode, sourceName, and record or records[].' });
+    }
+    const invalid = records.filter((record) => !record.stateCode || !record.sourceName);
+    if (invalid.length) return res.status(400).json({ ok: false, error: 'stateCode and sourceName are required.' });
+
+    const result = await ingestStateRegistryRecords(records);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/admin/enrich/texas', requireAdmin, async (req, res, next) => {
+  try {
+    const limit = Number.parseInt(String(req.body?.limit ?? config.texasEnrichmentLimit), 10);
+    const result = await enrichTexasCarriers({
+      limit: Number.isFinite(limit) ? limit : config.texasEnrichmentLimit,
+      usdotNumbers: stringArray(req.body?.usdotNumbers ?? req.body?.usdotNumber),
+      records: Array.isArray(req.body?.records) ? req.body.records : undefined
+    });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/leads', async (req, res, next) => {
   try {
     const limit = Math.min(500, Number.parseInt(String(req.query.limit ?? 100), 10) || 100);
     const minGrade = String(req.query.minGrade ?? 'B');
-    const leads = await getTopLeads(limit, minGrade);
-    res.json({ ok: true, count: leads.length, leads });
+    const qualityGate = boolQuery(req.query.qualityGate);
+    const leads = await getTopLeads(limit, minGrade, qualityGate);
+    res.json({ ok: true, count: leads.length, qualityGate, leads });
   } catch (error) {
     next(error);
   }
@@ -105,6 +178,7 @@ app.get('/stats', async (_req, res, next) => {
         (select count(*)::int from fmcsa_carriers) as carriers,
         (select count(*)::int from insurance_leads) as leads,
         (select count(*)::int from insurance_leads where lead_grade in ('A+', 'A')) as hot_leads,
+        (select count(*)::int from insurance_leads where sales_ready = true) as sales_ready_leads,
         (select max(started_at) from import_runs) as last_import_at
     `);
     res.json({ ok: true, stats: result.rows[0] });
