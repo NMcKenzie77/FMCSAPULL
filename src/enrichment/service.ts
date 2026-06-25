@@ -49,6 +49,10 @@ function clean(value: unknown): string | null {
   return text.length ? text : null;
 }
 
+function safeKey(value: string | null | undefined): string {
+  return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 240) || 'unknown';
+}
+
 function normalizeState(value: unknown): string {
   return String(value ?? '').trim().toUpperCase();
 }
@@ -105,7 +109,7 @@ function isBadStatus(carrier: CarrierRow, parsed: ParsedRegistryRecord): boolean
 
 function hasActiveSignal(carrier: CarrierRow, parsed: ParsedRegistryRecord): boolean {
   const text = `${carrier.usdot_status ?? ''} ${carrier.allowed_to_operate ?? ''} ${carrier.authority_status ?? ''} ${parsed.entityStatus ?? ''} ${parsed.rightToTransact ?? ''}`;
-  return textIncludesAny(text, ['active', 'allowed', 'authorized', 'granted', 'in good standing', 'right to transact', 'franchise tax responsibilities ended']) || Boolean(parsed.entityId);
+  return textIncludesAny(text, ['active', 'allowed', 'authorized', 'granted', 'in good standing', 'right to transact']) || Boolean(parsed.entityId);
 }
 
 function isLiveryOrPassenger(carrier: CarrierRow): boolean {
@@ -147,14 +151,18 @@ async function getCarrier(client: PoolClient, input: StateRegistryRecordInput): 
   return null;
 }
 
+function registryRecordKey(input: StateRegistryRecordInput, parsed: ParsedRegistryRecord): string {
+  return safeKey(parsed.entityId || parsed.matchedName || input.searchName || input.legalName || JSON.stringify(parsed.raw).slice(0, 200));
+}
+
 async function upsertRegistryMatch(client: PoolClient, carrierId: number, input: StateRegistryRecordInput, parsed: ParsedRegistryRecord): Promise<number> {
   const result = await client.query<{ id: string }>(
     `insert into state_registry_matches (
-       carrier_id, state_code, source_name, search_name, matched_name, entity_id, entity_status, right_to_transact,
+       carrier_id, state_code, source_name, registry_record_key, search_name, matched_name, entity_id, entity_status, right_to_transact,
        registered_office_street, registered_office_city, registered_office_state, registered_office_zip,
        registered_agent_name, registered_agent_type, registered_agent_address, match_confidence, raw
-     ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-     on conflict (carrier_id, state_code, source_name, coalesce_entity_id) do update set
+     ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+     on conflict (carrier_id, state_code, source_name, registry_record_key) do update set
        search_name = excluded.search_name,
        matched_name = coalesce(excluded.matched_name, state_registry_matches.matched_name),
        entity_status = coalesce(excluded.entity_status, state_registry_matches.entity_status),
@@ -174,6 +182,7 @@ async function upsertRegistryMatch(client: PoolClient, carrierId: number, input:
       carrierId,
       normalizeState(input.stateCode),
       input.sourceName,
+      registryRecordKey(input, parsed),
       input.searchName ?? input.legalName ?? null,
       parsed.matchedName,
       parsed.entityId,
@@ -195,11 +204,12 @@ async function upsertRegistryMatch(client: PoolClient, carrierId: number, input:
 
 async function upsertDecisionMakers(client: PoolClient, carrierId: number, registryMatchId: number, parsed: ParsedRegistryRecord): Promise<void> {
   for (const officer of parsed.officers) {
+    const contactKey = safeKey(`${officer.name}|${officer.title ?? ''}`);
     await client.query(
       `insert into decision_maker_contacts (
-         carrier_id, registry_match_id, source, person_name, title, contact_type, confidence, priority_rank, raw
-       ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-       on conflict (carrier_id, source, lower_person_name, lower_title) do update set
+         carrier_id, registry_match_id, source, contact_key, person_name, title, contact_type, confidence, priority_rank, raw
+       ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       on conflict (carrier_id, source, contact_key) do update set
          registry_match_id = excluded.registry_match_id,
          confidence = greatest(decision_maker_contacts.confidence, excluded.confidence),
          priority_rank = least(decision_maker_contacts.priority_rank, excluded.priority_rank),
@@ -209,6 +219,7 @@ async function upsertDecisionMakers(client: PoolClient, carrierId: number, regis
         carrierId,
         registryMatchId,
         officer.source,
+        contactKey,
         officer.name,
         officer.title,
         officer.source === 'registered_agent' ? 'REGISTERED_AGENT' : 'OFFICER',
