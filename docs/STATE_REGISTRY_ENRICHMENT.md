@@ -31,7 +31,7 @@ The initializer adds:
 Use this when reviewing leads that should be eligible for ARKON/export:
 
 ```bash
-curl -s "https://fmcsapull-production.up.railway.app/leads?limit=25&minGrade=B&qualityGate=true" | jq
+curl -s "https://fmcsapull-production.up.railway.app/leads?limit=25&minGrade=B&qualityGate=true"
 ```
 
 A lead passes the gate only when it has:
@@ -44,18 +44,32 @@ A lead passes the gate only when it has:
 - active/authorized FMCSA signal or state registry confirmation
 - decision maker found, or company-level outreach path allowed
 
-ARKON and Google Sheets exports now use the quality gate automatically. Raw FMCSA rows should not be exported.
+ARKON and Google Sheets exports use the quality gate automatically. Raw FMCSA rows should not be exported.
 
 ## Texas enrichment
 
-Set these in Railway before live Texas API enrichment:
+Texas is the first true API adapter.
+
+Set this in Railway before live Texas enrichment:
 
 ```bash
 TX_COMPTROLLER_API_KEY=your_key_here
-TX_COMPTROLLER_API_URL=https://the-texas-endpoint/search?name={name}
 ```
 
-The adapter sends the key as `x-api-key` and replaces `{name}` or `{query}` in the URL with the company name. If neither token exists, it appends `?search=<company>` or `&search=<company>`.
+Optional override only if Texas changes the public-data host:
+
+```bash
+TX_COMPTROLLER_API_BASE_URL=https://api.comptroller.texas.gov/public-data/v1/public
+```
+
+The adapter now uses the official Texas Comptroller public-data flow:
+
+1. Search FTAS records by entity name:
+   - `GET /franchise-tax-list?name=<company>`
+2. Retrieve franchise account/officer details by 11-digit taxpayer ID:
+   - `GET /franchise-tax/<taxpayerId>`
+
+Both requests send the key as `x-api-key`.
 
 Run Texas enrichment:
 
@@ -75,6 +89,21 @@ curl -X POST "https://fmcsapull-production.up.railway.app/admin/enrich/texas" \
   -d '{"usdotNumber":"284491"}'
 ```
 
+## API key / source matrix
+
+Do not paste real API keys into chat or git. Put secrets only in Railway variables.
+
+| State | Variable | Current source strategy |
+| --- | --- | --- |
+| TX | `TX_COMPTROLLER_API_KEY` | Official Texas Comptroller public-data API. |
+| FL | none currently | Official Sunbiz daily/quarterly downloads over public SFTP; no live key in the current adapter. |
+| GA | none currently | Official Georgia Corporations Division search; adapter planned. |
+| NC | none currently | Official Secretary of State search; adapter planned. |
+| AZ | none currently | Arizona Corporation Commission eCorp search; adapter planned. |
+| TN | none currently | Tennessee business information search; adapter planned. |
+
+Placeholders exist in `.env.example` for future state-specific keys, but do not set them unless the state actually provides an official key.
+
 ## Manual state registry import
 
 Use this endpoint when a state is better handled by download/search instead of live API, such as early Florida Sunbiz work.
@@ -90,17 +119,17 @@ curl -X POST "https://fmcsapull-production.up.railway.app/admin/enrich/state-rec
     "searchName":"FAST TRUCKING INC",
     "records":[
       {
-        "entity_name":"FAST TRUCKING INC",
-        "entity_id":"example-entity-id",
-        "entity_status":"ACTIVE",
-        "right_to_transact":"ACTIVE",
-        "registered_office_street":"123 MAIN ST",
-        "registered_office_city":"RIO GRANDE CITY",
-        "registered_office_state":"TX",
-        "registered_office_zip":"78582",
-        "registered_agent_name":"Example Owner",
-        "officers":[
-          {"name":"Example Owner", "title":"President"}
+        "name":"FAST TRUCKING INC",
+        "taxpayerId":"12345678901",
+        "sosRegistrationStatus":"Active",
+        "rightToTransactTX":"Y",
+        "registeredOfficeAddressStreet":"123 MAIN ST",
+        "registeredOfficeAddressCity":"RIO GRANDE CITY",
+        "registeredOfficeAddressState":"TX",
+        "registeredOfficeAddressZip":"78582",
+        "registeredAgentName":"Example Owner",
+        "officerInfo":[
+          {"AGNT_NM":"Example Owner", "AGNT_TITL_TX":"PRESIDENT"}
         ]
       }
     ]
@@ -111,7 +140,7 @@ curl -X POST "https://fmcsapull-production.up.railway.app/admin/enrich/state-rec
 
 ```bash
 curl -s "https://fmcsapull-production.up.railway.app/admin/enrichment/sources" \
-  -H "x-admin-api-key: $ADMIN_API_KEY" | jq
+  -H "x-admin-api-key: $ADMIN_API_KEY"
 ```
 
 ## Next adapter order
