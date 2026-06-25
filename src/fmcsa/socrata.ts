@@ -9,8 +9,67 @@ export interface FetchOptions {
   where?: string;
 }
 
+export interface DatasetCheckResult {
+  source: ImportSource;
+  datasetId: string;
+  url: string;
+  ok: boolean;
+  status?: number;
+  statusText?: string;
+  sampleCount?: number;
+  error?: string;
+}
+
 export function socrataResourceUrl(datasetId: string): string {
   return `${config.dataHost}/resource/${datasetId}.json`;
+}
+
+export async function checkSocrataDataset(source: ImportSource): Promise<DatasetCheckResult> {
+  const datasetId = datasetForSource(source);
+  const url = new URL(socrataResourceUrl(datasetId));
+  url.searchParams.set('$limit', '1');
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        accept: 'application/json',
+        'user-agent': 'FMCSAPULL insurance lead importer/0.1'
+      }
+    });
+
+    const body = await response.text().catch(() => '');
+    if (!response.ok) {
+      return {
+        source,
+        datasetId,
+        url: url.toString(),
+        ok: false,
+        status: response.status,
+        statusText: response.statusText,
+        error: body.slice(0, 500)
+      };
+    }
+
+    const json = JSON.parse(body || '[]') as unknown;
+    return {
+      source,
+      datasetId,
+      url: url.toString(),
+      ok: Array.isArray(json),
+      status: response.status,
+      statusText: response.statusText,
+      sampleCount: Array.isArray(json) ? json.length : undefined,
+      error: Array.isArray(json) ? undefined : 'Socrata response was not an array.'
+    };
+  } catch (error) {
+    return {
+      source,
+      datasetId,
+      url: url.toString(),
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
 }
 
 export async function fetchSocrataPage(options: FetchOptions): Promise<SocrataRecord[]> {
