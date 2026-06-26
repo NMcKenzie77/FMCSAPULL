@@ -58,54 +58,55 @@ function adminPageHtml(): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Invicta Capital Group — Lead Engine Admin</title>
+  <title>Invicta Capital Group — Commercial Lead Desk</title>
   <style>
     :root{
-      --bg:#07111f;
-      --panel:#0d1b2f;
-      --panel2:#10233f;
-      --border:rgba(148,163,184,.22);
-      --text:#e5e7eb;
-      --muted:#94a3b8;
-      --accent:#38bdf8;
-      --good:#34d399;
-      --warn:#f59e0b;
-      --bad:#fb7185;
-      --shadow:0 22px 70px rgba(0,0,0,.4);
+      --bg:#f5f7fb;
+      --panel:#ffffff;
+      --panel2:#f8fafc;
+      --border:#e2e8f0;
+      --text:#0f172a;
+      --muted:#64748b;
+      --accent:#2563eb;
+      --good:#16a34a;
+      --warn:#d97706;
+      --bad:#dc2626;
+      --shadow:0 18px 45px rgba(15,23,42,.08);
     }
     *{box-sizing:border-box}
-    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:radial-gradient(circle at top left,#12345a 0,#07111f 34%,#050914 100%);color:var(--text)}
-    .wrap{max-width:1180px;margin:0 auto;padding:22px 16px 60px}
-    .top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px}
-    .brand h1{margin:0;font-size:24px;letter-spacing:-.02em}.brand p{margin:6px 0 0;color:var(--muted);font-size:14px}
-    .pill{border:1px solid var(--border);background:rgba(13,27,47,.75);border-radius:999px;padding:8px 12px;color:var(--muted);font-size:13px}
-    .card{background:linear-gradient(180deg,rgba(13,27,47,.94),rgba(16,35,63,.92));border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow)}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+    body:before{content:'Invicta Capital Group\A Commercial Lead Desk\A\A Overview\A Ready Leads\A Carrier Search\A State Records\A Send Queue';white-space:pre-line;position:fixed;left:0;top:0;bottom:0;width:246px;background:linear-gradient(180deg,#0b1220,#111827);color:#e5e7eb;padding:26px 20px;font-weight:800;line-height:2.25;box-shadow:10px 0 30px rgba(15,23,42,.08)}
+    .wrap{max-width:1180px;margin:0 auto 0 246px;padding:26px 22px 60px}
+    .top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;background:#fff;border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--shadow)}
+    .brand h1{margin:0;font-size:27px;letter-spacing:-.03em}.brand p{margin:7px 0 0;color:var(--muted);font-size:14px;line-height:1.45}
+    .pill{border:1px solid var(--border);background:#fff;border-radius:999px;padding:8px 12px;color:var(--muted);font-size:13px;box-shadow:var(--shadow)}
+    .card{background:#fff;border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow)}
     .login{max-width:520px;margin:60px auto;padding:24px}.login h2{margin:0 0 8px}.login p{color:var(--muted);line-height:1.5}
-    input,select{width:100%;background:#07111f;border:1px solid var(--border);border-radius:12px;color:var(--text);padding:12px 13px;font-size:15px;outline:none}input:focus,select:focus{border-color:var(--accent)}
-    button{border:0;border-radius:12px;background:var(--accent);color:#00111d;padding:11px 14px;font-weight:800;cursor:pointer}button.secondary{background:#1f3558;color:var(--text);border:1px solid var(--border)}button.danger{background:#7f1d1d;color:#fff}button:disabled{opacity:.55;cursor:not-allowed}
-    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}.stat{padding:16px}.stat .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.stat .value{font-size:30px;font-weight:900;margin-top:8px}
-    .main{display:grid;grid-template-columns:340px 1fr;gap:14px}.panel{padding:16px}.panel h2{font-size:17px;margin:0 0 12px}.actions{display:grid;gap:10px}.row{display:grid;grid-template-columns:1fr 100px;gap:8px}.hint{font-size:12px;color:var(--muted);line-height:1.45;margin-top:6px}
-    .lead{padding:16px;margin-bottom:12px}.leadTop{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.lead h3{margin:0;font-size:19px}.score{font-size:13px;border-radius:999px;padding:6px 9px;background:rgba(52,211,153,.14);color:var(--good);border:1px solid rgba(52,211,153,.35);white-space:nowrap}.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:13px}.item{border:1px solid var(--border);border-radius:12px;padding:10px;background:rgba(7,17,31,.45)}.item b{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}.item span{font-size:14px;word-break:break-word}.products{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.tag{font-size:12px;border:1px solid var(--border);background:#07111f;border-radius:999px;padding:6px 8px;color:#cbd5e1}.angle{margin-top:12px;color:#cbd5e1;line-height:1.45;font-size:14px}
-    pre{white-space:pre-wrap;word-break:break-word;background:#04101f;border:1px solid var(--border);border-radius:14px;padding:12px;max-height:360px;overflow:auto;color:#cbd5e1}.hidden{display:none}.status{font-size:13px;color:var(--muted)}.ok{color:var(--good)}.bad{color:var(--bad)}
-    @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.main{grid-template-columns:1fr}.meta{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}}
+    input,select{width:100%;background:#fff;border:1px solid var(--border);border-radius:12px;color:var(--text);padding:12px 13px;font-size:15px;outline:none}input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(37,99,235,.1)}
+    button{border:0;border-radius:12px;background:var(--accent);color:#fff;padding:11px 14px;font-weight:800;cursor:pointer;box-shadow:0 10px 20px rgba(37,99,235,.18)}button.secondary{background:#fff;color:var(--text);border:1px solid var(--border);box-shadow:none}button.danger{background:#991b1b;color:#fff}button:disabled{opacity:.55;cursor:not-allowed}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}.stat{padding:18px}.stat .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.stat .value{font-size:32px;font-weight:900;margin-top:8px;letter-spacing:-.04em}
+    .main{display:grid;grid-template-columns:350px 1fr;gap:16px}.panel{padding:18px}.panel h2{font-size:17px;margin:0 0 12px}.actions{display:grid;gap:10px}.row{display:grid;grid-template-columns:1fr 100px;gap:8px}.hint{font-size:12px;color:var(--muted);line-height:1.45;margin-top:8px}
+    .lead{padding:16px;margin-bottom:12px}.leadTop{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px}.lead h3{margin:0;font-size:20px;letter-spacing:-.02em}.score{font-size:13px;border-radius:999px;padding:7px 10px;background:#ecfdf5;color:#166534;border:1px solid #bbf7d0;font-weight:900;white-space:nowrap}.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:13px}.item{border:1px solid var(--border);border-radius:14px;padding:11px;background:var(--panel2)}.item b{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em}.item span{font-size:14px;word-break:break-word;line-height:1.35}.products{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.tag{font-size:12px;border:1px solid var(--border);background:#fff;border-radius:999px;padding:6px 8px;color:#334155;font-weight:700}.angle{margin-top:12px;color:#334155;line-height:1.45;font-size:14px}
+    pre{white-space:pre-wrap;word-break:break-word;background:#0b1220;border:1px solid #1f2937;border-radius:14px;padding:12px;max-height:360px;overflow:auto;color:#cbd5e1}.hidden{display:none}.status{font-size:13px;color:var(--muted)}.ok{color:var(--good)}.bad{color:var(--bad)}
+    @media(max-width:1000px){body:before{display:none}.wrap{margin:0;padding:16px}.grid{grid-template-columns:repeat(2,1fr)}.main{grid-template-columns:1fr}.meta{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="top">
       <div class="brand">
-        <h1>Invicta Capital Group Lead Engine</h1>
-        <p>FMCSA import, commercial P&C scoring, state enrichment, quality gate, and ARKON export control.</p>
+        <h1>Commercial trucking pipeline</h1>
+        <p>Review sales-ready trucking companies, run the carrier list, verify state records, and send only qualified opportunities to the CRM.</p>
       </div>
       <div class="pill" id="sessionPill">Admin session not started</div>
     </div>
 
     <section class="card login" id="loginCard">
       <h2>Admin Login</h2>
-      <p>Enter the Railway admin API key. The key stays in this browser session and is sent as the <strong>x-admin-api-key</strong> header for admin actions.</p>
-      <input id="adminKey" type="password" placeholder="Admin API key" autocomplete="current-password" />
+      <p>Enter the admin key to open the lead desk. The key stays in this browser session.</p>
+      <input id="adminKey" type="password" placeholder="Admin key" autocomplete="current-password" />
       <div style="display:flex;gap:10px;margin-top:12px">
-        <button id="loginBtn">Login</button>
+        <button id="loginBtn">Open Lead Desk</button>
         <button class="secondary" id="clearBtn" type="button">Clear</button>
       </div>
       <p class="status" id="loginStatus"></p>
@@ -114,37 +115,37 @@ function adminPageHtml(): string {
     <section id="dashboard" class="hidden">
       <div class="grid">
         <div class="card stat"><div class="label">Carriers</div><div class="value" id="statCarriers">—</div></div>
-        <div class="card stat"><div class="label">Leads</div><div class="value" id="statLeads">—</div></div>
-        <div class="card stat"><div class="label">Hot Leads</div><div class="value" id="statHot">—</div></div>
-        <div class="card stat"><div class="label">Sales Ready</div><div class="value" id="statReady">—</div></div>
+        <div class="card stat"><div class="label">Lead Queue</div><div class="value" id="statLeads">—</div></div>
+        <div class="card stat"><div class="label">A-Grade</div><div class="value" id="statHot">—</div></div>
+        <div class="card stat"><div class="label">Ready</div><div class="value" id="statReady">—</div></div>
       </div>
 
       <div class="main">
         <div class="card panel">
-          <h2>Admin Controls</h2>
+          <h2>Production Controls</h2>
           <div class="actions">
             <button class="secondary" id="refreshBtn">Refresh Dashboard</button>
-            <button id="importBtn">Import FMCSA Census 1,000</button>
-            <button id="scoreBtn">Refresh Scoring</button>
+            <button id="importBtn">Import 1,000 Carriers</button>
+            <button id="scoreBtn">Refresh Scores</button>
             <div class="row">
-              <button id="txBtn">Enrich Texas</button>
+              <button id="txBtn">Verify Texas</button>
               <select id="txLimit"><option>10</option><option>25</option><option>50</option></select>
             </div>
             <div class="row">
-              <button id="flBtn">Enrich Florida</button>
+              <button id="flBtn">Verify Florida</button>
               <select id="flLimit"><option>10</option><option>25</option><option>50</option></select>
             </div>
-            <button id="arkonBtn">Test ARKON Export: 1 Lead</button>
-            <button id="sheetsBtn" class="secondary">Export Sheets: 10 Leads</button>
+            <button id="arkonBtn">Send 1 Lead to CRM</button>
+            <button id="sheetsBtn" class="secondary">Send 10 Leads to Sheet</button>
             <button id="logoutBtn" class="danger">Logout</button>
           </div>
-          <p class="hint">Exports are quality-gated. If ARKON or Sheets webhooks are not configured, the export will safely return skipped=true.</p>
-          <h2 style="margin-top:18px">Last Action</h2>
+          <p class="hint">Only ready leads are sent. If the destination is not connected, the request safely skips.</p>
+          <h2 style="margin-top:18px">Last Result</h2>
           <pre id="output">Ready.</pre>
         </div>
 
         <div class="card panel">
-          <h2>Sales-Ready Leads</h2>
+          <h2>Ready Leads</h2>
           <div id="leads"></div>
         </div>
       </div>
@@ -207,7 +208,7 @@ function adminPageHtml(): string {
 
     function renderLeads(leads){
       if (!leads.length) {
-        leadsEl.innerHTML = '<p class="status">No sales-ready leads yet. Run import, scoring, and enrichment.</p>';
+        leadsEl.innerHTML = '<p class="status">No ready leads yet. Run import, scoring, and state verification.</p>';
         return;
       }
       leadsEl.innerHTML = leads.map(function(lead){
@@ -215,9 +216,9 @@ function adminPageHtml(): string {
         return '<div class="lead card">'
           + '<div class="leadTop"><div><h3>' + fmt(lead.legal_name) + '</h3><div class="status">DBA: ' + fmt(lead.dba_name) + ' · USDOT ' + fmt(lead.usdot_number) + '</div></div><div class="score">Grade ' + fmt(lead.lead_grade) + ' · ' + fmt(lead.lead_score) + '</div></div>'
           + '<div class="meta">'
-          + '<div class="item"><b>Operating Base</b><span>' + fmt(lead.hq_street) + '<br>' + fmt(lead.hq_city) + ', ' + fmt(lead.hq_state) + ' ' + fmt(lead.hq_zip) + '<br>Source: ' + fmt(lead.hq_source) + '</span></div>'
-          + '<div class="item"><b>Fleet</b><span>' + fmt(lead.power_units) + ' power units<br>' + fmt(lead.drivers) + ' drivers</span></div>'
-          + '<div class="item"><b>Contact</b><span>' + fmt(lead.phone) + '<br>' + fmt(lead.email) + '</span></div>'
+          + '<div class="item"><b>Operating Base</b><span>' + fmt(lead.hq_street) + '<br>' + fmt(lead.hq_city) + ', ' + fmt(lead.hq_state) + ' ' + fmt(lead.hq_zip) + '<br>' + fmt(lead.hq_source) + '</span></div>'
+          + '<div class="item"><b>Fleet Exposure</b><span>' + fmt(lead.power_units) + ' power units<br>' + fmt(lead.drivers) + ' drivers</span></div>'
+          + '<div class="item"><b>Contact Path</b><span>' + fmt(lead.phone) + '<br>' + fmt(lead.email) + '</span></div>'
           + '<div class="item"><b>Decision Maker</b><span>' + fmt(lead.decision_maker_name) + '<br>' + fmt(lead.decision_maker_title) + '</span></div>'
           + '</div>'
           + '<div class="products">' + products + '</div>'
@@ -273,12 +274,12 @@ function adminPageHtml(): string {
     document.getElementById('clearBtn').addEventListener('click', function(){ keyInput.value=''; sessionStorage.removeItem('FMCSA_ADMIN_KEY'); });
     document.getElementById('logoutBtn').addEventListener('click', function(){ sessionStorage.removeItem('FMCSA_ADMIN_KEY'); showLogin(); });
     document.getElementById('refreshBtn').addEventListener('click', function(){ run('Refreshing dashboard', refreshAll); });
-    document.getElementById('importBtn').addEventListener('click', function(){ run('Importing FMCSA census', function(){ return adminPost('/admin/import', { source:'company-census', limit:1000 }); }); });
+    document.getElementById('importBtn').addEventListener('click', function(){ run('Importing carriers', function(){ return adminPost('/admin/import', { source:'company-census', limit:1000 }); }); });
     document.getElementById('scoreBtn').addEventListener('click', function(){ run('Refreshing scores', function(){ return adminPost('/admin/score/refresh', {}); }); });
-    document.getElementById('txBtn').addEventListener('click', function(){ run('Enriching Texas leads', function(){ return adminPost('/admin/enrich/texas', { limit:Number(document.getElementById('txLimit').value) }); }); });
-    document.getElementById('flBtn').addEventListener('click', function(){ run('Enriching Florida leads', function(){ return adminPost('/admin/enrich/fl', { limit:Number(document.getElementById('flLimit').value) }); }); });
-    document.getElementById('arkonBtn').addEventListener('click', function(){ run('Testing ARKON export', function(){ return adminPost('/admin/export/arkon', { limit:1, minGrade:'B' }); }); });
-    document.getElementById('sheetsBtn').addEventListener('click', function(){ run('Exporting to Sheets', function(){ return adminPost('/admin/export/sheets', { limit:10, minGrade:'B' }); }); });
+    document.getElementById('txBtn').addEventListener('click', function(){ run('Verifying Texas records', function(){ return adminPost('/admin/enrich/texas', { limit:Number(document.getElementById('txLimit').value) }); }); });
+    document.getElementById('flBtn').addEventListener('click', function(){ run('Verifying Florida records', function(){ return adminPost('/admin/enrich/fl', { limit:Number(document.getElementById('flLimit').value) }); }); });
+    document.getElementById('arkonBtn').addEventListener('click', function(){ run('Sending one lead to CRM', function(){ return adminPost('/admin/export/arkon', { limit:1, minGrade:'B' }); }); });
+    document.getElementById('sheetsBtn').addEventListener('click', function(){ run('Sending leads to sheet', function(){ return adminPost('/admin/export/sheets', { limit:10, minGrade:'B' }); }); });
 
     if (adminKey()) { showDashboard(); refreshAll().catch(function(error){ setOutput({ ok:false, error:error.message }); }); }
   </script>
