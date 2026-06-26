@@ -53,242 +53,42 @@ function registryInputsFromBody(body: unknown): StateRegistryRecordInput[] {
 }
 
 function adminPageHtml(): string {
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Invicta Capital Group — Commercial Lead Desk</title>
-  <style>
-    :root{
-      --bg:#f5f7fb;
-      --panel:#ffffff;
-      --panel2:#f8fafc;
-      --border:#e2e8f0;
-      --text:#0f172a;
-      --muted:#64748b;
-      --accent:#2563eb;
-      --good:#16a34a;
-      --warn:#d97706;
-      --bad:#dc2626;
-      --shadow:0 18px 45px rgba(15,23,42,.08);
-    }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
-    body:before{content:'Invicta Capital Group\A Commercial Lead Desk\A\A Overview\A Ready Leads\A Carrier Search\A State Records\A Send Queue';white-space:pre-line;position:fixed;left:0;top:0;bottom:0;width:246px;background:linear-gradient(180deg,#0b1220,#111827);color:#e5e7eb;padding:26px 20px;font-weight:800;line-height:2.25;box-shadow:10px 0 30px rgba(15,23,42,.08)}
-    .wrap{max-width:1180px;margin:0 auto 0 246px;padding:26px 22px 60px}
-    .top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;background:#fff;border:1px solid var(--border);border-radius:20px;padding:18px;box-shadow:var(--shadow)}
-    .brand h1{margin:0;font-size:27px;letter-spacing:-.03em}.brand p{margin:7px 0 0;color:var(--muted);font-size:14px;line-height:1.45}
-    .pill{border:1px solid var(--border);background:#fff;border-radius:999px;padding:8px 12px;color:var(--muted);font-size:13px;box-shadow:var(--shadow)}
-    .card{background:#fff;border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow)}
-    .login{max-width:520px;margin:60px auto;padding:24px}.login h2{margin:0 0 8px}.login p{color:var(--muted);line-height:1.5}
-    input,select{width:100%;background:#fff;border:1px solid var(--border);border-radius:12px;color:var(--text);padding:12px 13px;font-size:15px;outline:none}input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(37,99,235,.1)}
-    button{border:0;border-radius:12px;background:var(--accent);color:#fff;padding:11px 14px;font-weight:800;cursor:pointer;box-shadow:0 10px 20px rgba(37,99,235,.18)}button.secondary{background:#fff;color:var(--text);border:1px solid var(--border);box-shadow:none}button.danger{background:#991b1b;color:#fff}button:disabled{opacity:.55;cursor:not-allowed}
-    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}.stat{padding:18px}.stat .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.stat .value{font-size:32px;font-weight:900;margin-top:8px;letter-spacing:-.04em}
-    .main{display:grid;grid-template-columns:350px 1fr;gap:16px}.panel{padding:18px}.panel h2{font-size:17px;margin:0 0 12px}.actions{display:grid;gap:10px}.row{display:grid;grid-template-columns:1fr 100px;gap:8px}.hint{font-size:12px;color:var(--muted);line-height:1.45;margin-top:8px}
-    .lead{padding:16px;margin-bottom:12px}.leadTop{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px}.lead h3{margin:0;font-size:20px;letter-spacing:-.02em}.score{font-size:13px;border-radius:999px;padding:7px 10px;background:#ecfdf5;color:#166534;border:1px solid #bbf7d0;font-weight:900;white-space:nowrap}.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:13px}.item{border:1px solid var(--border);border-radius:14px;padding:11px;background:var(--panel2)}.item b{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em}.item span{font-size:14px;word-break:break-word;line-height:1.35}.products{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.tag{font-size:12px;border:1px solid var(--border);background:#fff;border-radius:999px;padding:6px 8px;color:#334155;font-weight:700}.angle{margin-top:12px;color:#334155;line-height:1.45;font-size:14px}
-    pre{white-space:pre-wrap;word-break:break-word;background:#0b1220;border:1px solid #1f2937;border-radius:14px;padding:12px;max-height:360px;overflow:auto;color:#cbd5e1}.hidden{display:none}.status{font-size:13px;color:var(--muted)}.ok{color:var(--good)}.bad{color:var(--bad)}
-    @media(max-width:1000px){body:before{display:none}.wrap{margin:0;padding:16px}.grid{grid-template-columns:repeat(2,1fr)}.main{grid-template-columns:1fr}.meta{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="top">
-      <div class="brand">
-        <h1>Commercial trucking pipeline</h1>
-        <p>Review sales-ready trucking companies, run the carrier list, verify state records, and send only qualified opportunities to the CRM.</p>
-      </div>
-      <div class="pill" id="sessionPill">Admin session not started</div>
-    </div>
-
-    <section class="card login" id="loginCard">
-      <h2>Admin Login</h2>
-      <p>Enter the admin key to open the lead desk. The key stays in this browser session.</p>
-      <input id="adminKey" type="password" placeholder="Admin key" autocomplete="current-password" />
-      <div style="display:flex;gap:10px;margin-top:12px">
-        <button id="loginBtn">Open Lead Desk</button>
-        <button class="secondary" id="clearBtn" type="button">Clear</button>
-      </div>
-      <p class="status" id="loginStatus"></p>
-    </section>
-
-    <section id="dashboard" class="hidden">
-      <div class="grid">
-        <div class="card stat"><div class="label">Carriers</div><div class="value" id="statCarriers">—</div></div>
-        <div class="card stat"><div class="label">Lead Queue</div><div class="value" id="statLeads">—</div></div>
-        <div class="card stat"><div class="label">A-Grade</div><div class="value" id="statHot">—</div></div>
-        <div class="card stat"><div class="label">Ready</div><div class="value" id="statReady">—</div></div>
-      </div>
-
-      <div class="main">
-        <div class="card panel">
-          <h2>Production Controls</h2>
-          <div class="actions">
-            <button class="secondary" id="refreshBtn">Refresh Dashboard</button>
-            <button id="importBtn">Import 1,000 Carriers</button>
-            <button id="scoreBtn">Refresh Scores</button>
-            <div class="row">
-              <button id="txBtn">Verify Texas</button>
-              <select id="txLimit"><option>10</option><option>25</option><option>50</option></select>
-            </div>
-            <div class="row">
-              <button id="flBtn">Verify Florida</button>
-              <select id="flLimit"><option>10</option><option>25</option><option>50</option></select>
-            </div>
-            <button id="arkonBtn">Send 1 Lead to CRM</button>
-            <button id="sheetsBtn" class="secondary">Send 10 Leads to Sheet</button>
-            <button id="logoutBtn" class="danger">Logout</button>
-          </div>
-          <p class="hint">Only ready leads are sent. If the destination is not connected, the request safely skips.</p>
-          <h2 style="margin-top:18px">Last Result</h2>
-          <pre id="output">Ready.</pre>
-        </div>
-
-        <div class="card panel">
-          <h2>Ready Leads</h2>
-          <div id="leads"></div>
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <script>
-    const keyInput = document.getElementById('adminKey');
-    const loginCard = document.getElementById('loginCard');
-    const dashboard = document.getElementById('dashboard');
-    const loginStatus = document.getElementById('loginStatus');
-    const sessionPill = document.getElementById('sessionPill');
-    const output = document.getElementById('output');
-    const leadsEl = document.getElementById('leads');
-
-    function adminKey(){ return sessionStorage.getItem('FMCSA_ADMIN_KEY') || ''; }
-    function headers(){ return { 'content-type': 'application/json', 'x-admin-api-key': adminKey() }; }
-    function setOutput(value){ output.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2); }
-    function fmt(value){ return value === null || value === undefined || value === '' ? 'N/A' : String(value); }
-
-    async function api(path, options){
-      const response = await fetch(path, options || {});
-      const text = await response.text();
-      let data;
-      try { data = JSON.parse(text); } catch (_error) { data = { ok:false, raw:text }; }
-      if (!response.ok) throw new Error(data.error || text || 'Request failed');
-      return data;
-    }
-
-    async function adminPost(path, body){
-      return api(path, { method:'POST', headers:headers(), body:JSON.stringify(body || {}) });
-    }
-
-    async function adminGet(path){
-      return api(path, { headers:headers() });
-    }
-
-    function showDashboard(){
-      loginCard.classList.add('hidden');
-      dashboard.classList.remove('hidden');
-      sessionPill.textContent = 'Admin session active';
-      sessionPill.classList.add('ok');
-    }
-
-    function showLogin(){
-      dashboard.classList.add('hidden');
-      loginCard.classList.remove('hidden');
-      sessionPill.textContent = 'Admin session not started';
-      sessionPill.classList.remove('ok');
-    }
-
-    async function loadStats(){
-      const data = await api('/stats');
-      const stats = data.stats || {};
-      document.getElementById('statCarriers').textContent = fmt(stats.carriers);
-      document.getElementById('statLeads').textContent = fmt(stats.leads);
-      document.getElementById('statHot').textContent = fmt(stats.hot_leads);
-      document.getElementById('statReady').textContent = fmt(stats.sales_ready_leads);
-    }
-
-    function renderLeads(leads){
-      if (!leads.length) {
-        leadsEl.innerHTML = '<p class="status">No ready leads yet. Run import, scoring, and state verification.</p>';
-        return;
-      }
-      leadsEl.innerHTML = leads.map(function(lead){
-        const products = (lead.recommended_products || []).map(function(product){ return '<span class="tag">' + product + '</span>'; }).join('');
-        return '<div class="lead card">'
-          + '<div class="leadTop"><div><h3>' + fmt(lead.legal_name) + '</h3><div class="status">DBA: ' + fmt(lead.dba_name) + ' · USDOT ' + fmt(lead.usdot_number) + '</div></div><div class="score">Grade ' + fmt(lead.lead_grade) + ' · ' + fmt(lead.lead_score) + '</div></div>'
-          + '<div class="meta">'
-          + '<div class="item"><b>Operating Base</b><span>' + fmt(lead.hq_street) + '<br>' + fmt(lead.hq_city) + ', ' + fmt(lead.hq_state) + ' ' + fmt(lead.hq_zip) + '<br>' + fmt(lead.hq_source) + '</span></div>'
-          + '<div class="item"><b>Fleet Exposure</b><span>' + fmt(lead.power_units) + ' power units<br>' + fmt(lead.drivers) + ' drivers</span></div>'
-          + '<div class="item"><b>Contact Path</b><span>' + fmt(lead.phone) + '<br>' + fmt(lead.email) + '</span></div>'
-          + '<div class="item"><b>Decision Maker</b><span>' + fmt(lead.decision_maker_name) + '<br>' + fmt(lead.decision_maker_title) + '</span></div>'
-          + '</div>'
-          + '<div class="products">' + products + '</div>'
-          + '<div class="angle">' + fmt(lead.outreach_angle) + '</div>'
-          + '<div class="hint ok">' + fmt(lead.sales_ready_reason) + '</div>'
-          + '</div>';
-      }).join('');
-    }
-
-    async function loadLeads(){
-      const data = await api('/leads?limit=25&minGrade=B&qualityGate=true');
-      renderLeads(data.leads || []);
-    }
-
-    async function refreshAll(){
-      await loadStats();
-      await loadLeads();
-    }
-
-    async function login(){
-      const key = keyInput.value.trim();
-      if (!key) { loginStatus.textContent = 'Enter the admin key.'; loginStatus.className = 'status bad'; return; }
-      sessionStorage.setItem('FMCSA_ADMIN_KEY', key);
-      try {
-        await adminGet('/admin/enrichment/sources');
-        loginStatus.textContent = '';
-        showDashboard();
-        await refreshAll();
-      } catch (error) {
-        sessionStorage.removeItem('FMCSA_ADMIN_KEY');
-        loginStatus.textContent = error.message || 'Login failed.';
-        loginStatus.className = 'status bad';
-      }
-    }
-
-    async function run(label, fn){
-      setOutput(label + '...');
-      const buttons = Array.from(document.querySelectorAll('button'));
-      buttons.forEach(function(button){ button.disabled = true; });
-      try {
-        const data = await fn();
-        setOutput(data);
-        await refreshAll();
-      } catch (error) {
-        setOutput({ ok:false, error:error.message || String(error) });
-      } finally {
-        buttons.forEach(function(button){ button.disabled = false; });
-      }
-    }
-
-    document.getElementById('loginBtn').addEventListener('click', login);
-    keyInput.addEventListener('keydown', function(event){ if (event.key === 'Enter') login(); });
-    document.getElementById('clearBtn').addEventListener('click', function(){ keyInput.value=''; sessionStorage.removeItem('FMCSA_ADMIN_KEY'); });
-    document.getElementById('logoutBtn').addEventListener('click', function(){ sessionStorage.removeItem('FMCSA_ADMIN_KEY'); showLogin(); });
-    document.getElementById('refreshBtn').addEventListener('click', function(){ run('Refreshing dashboard', refreshAll); });
-    document.getElementById('importBtn').addEventListener('click', function(){ run('Importing carriers', function(){ return adminPost('/admin/import', { source:'company-census', limit:1000 }); }); });
-    document.getElementById('scoreBtn').addEventListener('click', function(){ run('Refreshing scores', function(){ return adminPost('/admin/score/refresh', {}); }); });
-    document.getElementById('txBtn').addEventListener('click', function(){ run('Verifying Texas records', function(){ return adminPost('/admin/enrich/texas', { limit:Number(document.getElementById('txLimit').value) }); }); });
-    document.getElementById('flBtn').addEventListener('click', function(){ run('Verifying Florida records', function(){ return adminPost('/admin/enrich/fl', { limit:Number(document.getElementById('flLimit').value) }); }); });
-    document.getElementById('arkonBtn').addEventListener('click', function(){ run('Sending one lead to CRM', function(){ return adminPost('/admin/export/arkon', { limit:1, minGrade:'B' }); }); });
-    document.getElementById('sheetsBtn').addEventListener('click', function(){ run('Sending leads to sheet', function(){ return adminPost('/admin/export/sheets', { limit:10, minGrade:'B' }); }); });
-
-    if (adminKey()) { showDashboard(); refreshAll().catch(function(error){ setOutput({ ok:false, error:error.message }); }); }
-  </script>
-</body>
-</html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Invicta Admin</title><style>
+  body{margin:0;background:#f5f7fb;color:#0f172a;font-family:Arial,Helvetica,sans-serif}.shell{display:grid;grid-template-columns:240px 1fr;min-height:100vh}.side{background:#0b1220;color:white;padding:22px}.side h1{font-size:17px;margin:0}.side p{color:#94a3b8;font-size:12px;line-height:1.5}.nav{margin-top:24px;display:grid;gap:8px}.nav div{padding:11px 12px;border-radius:12px;background:#111827;color:#cbd5e1}.nav .on{background:white;color:#0f172a;font-weight:800}.main{padding:26px;max-width:1200px}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.top h2{font-size:30px;margin:0 0 6px}.top p{margin:0;color:#64748b}.pill,.card{background:white;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 18px 45px rgba(15,23,42,.08)}.pill{padding:9px 13px;font-size:13px;color:#64748b}.card{padding:18px}.login{max-width:520px;margin:64px auto}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}.num{font-size:31px;font-weight:900}.label{color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.08em}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.info{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:12px}.box b{display:block;color:#64748b;font-size:12px;margin-bottom:5px}.box span{font-weight:800}button{border:0;background:#2563eb;color:white;border-radius:12px;padding:11px 13px;font-weight:800;cursor:pointer}button.secondary{background:white;color:#0f172a;border:1px solid #e2e8f0}.actions{display:grid;gap:9px}.row{display:grid;grid-template-columns:1fr 84px;gap:8px}input,select{width:100%;padding:11px;border:1px solid #e2e8f0;border-radius:12px}.hidden{display:none}.ok{color:#16a34a}.bad{color:#dc2626}.muted{color:#64748b;font-size:13px}pre{background:#0b1220;color:#cbd5e1;border-radius:14px;padding:12px;max-height:330px;overflow:auto;white-space:pre-wrap}.table{width:100%;border-collapse:collapse}.table td,.table th{border-bottom:1px solid #e2e8f0;padding:10px;text-align:left;font-size:13px}@media(max-width:900px){.shell{grid-template-columns:1fr}.side{display:none}.grid4,.grid2,.info{grid-template-columns:1fr}.top{display:block}}
+  </style></head><body><div class="shell"><aside class="side"><h1>Invicta Capital Group</h1><p>Administrator console</p><div class="nav"><div class="on">Admin Overview</div><div>Users & Roles</div><div>Agency Settings</div><div>Integrations</div><div>Data Jobs</div><div>Audit Output</div></div><p style="margin-top:24px">This page is for system administration, not agent lead work.</p></aside><main class="main"><div class="top"><div><h2>System Administration</h2><p>Signed-in admin, agency settings, integrations, database counts, and controlled jobs.</p></div><div class="pill" id="sessionPill">Not signed in</div></div><section class="card login" id="loginCard"><h2>Admin Login</h2><p class="muted">Enter the admin key to open the administrator console.</p><input id="adminKey" type="password" placeholder="Admin key"/><div style="display:flex;gap:10px;margin-top:12px"><button id="loginBtn">Open Admin Console</button><button class="secondary" id="clearBtn">Clear</button></div><p class="muted" id="loginStatus"></p></section><section id="dashboard" class="hidden"><div class="grid4"><div class="card"><div class="label">Carriers</div><div class="num" id="statCarriers">—</div></div><div class="card"><div class="label">Lead Rows</div><div class="num" id="statLeads">—</div></div><div class="card"><div class="label">Hot Leads</div><div class="num" id="statHot">—</div></div><div class="card"><div class="label">Ready Leads</div><div class="num" id="statReady">—</div></div></div><div class="grid2"><div class="card"><h3>Who is signed in</h3><div class="info"><div class="box"><b>Signed in as</b><span id="who">—</span></div><div class="box"><b>Role</b><span id="role">—</span></div><div class="box"><b>Agency</b><span>Invicta Capital Group</span></div><div class="box"><b>Agency ID</b><span id="agency">—</span></div></div><h3>Integration status</h3><table class="table"><tbody id="integrations"></tbody></table></div><div class="card"><h3>Administrator Operations</h3><div class="actions"><button class="secondary" id="refreshBtn">Refresh Admin Console</button><button class="secondary" id="dbInitBtn">Initialize Database Schema</button><button id="importBtn">Import 1,000 Carriers</button><button id="scoreBtn">Refresh Scores</button><div class="row"><button id="txBtn">Run Texas Verification</button><select id="txLimit"><option>10</option><option>25</option><option>50</option></select></div><div class="row"><button id="flBtn">Run Florida Verification</button><select id="flLimit"><option>10</option><option>25</option><option>50</option></select></div><button id="arkonBtn">Test CRM Export: 1 Lead</button><button id="sheetsBtn" class="secondary">Test Sheet Export: 10 Leads</button><button id="logoutBtn" style="background:#991b1b">Logout</button></div></div></div><div class="grid2" style="margin-top:14px"><div class="card"><h3>Quality Gate Snapshot</h3><table class="table"><thead><tr><th>Company</th><th>USDOT</th><th>Grade</th><th>Status</th></tr></thead><tbody id="readyRows"></tbody></table></div><div class="card"><h3>Admin Audit Output</h3><pre id="output">Ready.</pre></div></div></section></main></div><script>
+  const keyInput=document.getElementById('adminKey'),loginCard=document.getElementById('loginCard'),dashboard=document.getElementById('dashboard'),sessionPill=document.getElementById('sessionPill'),output=document.getElementById('output');
+  function k(){return sessionStorage.getItem('FMCSA_ADMIN_KEY')||''}function h(){return{'content-type':'application/json','x-admin-api-key':k()}}function out(v){output.textContent=typeof v==='string'?v:JSON.stringify(v,null,2)}function f(v){return v===null||v===undefined||v===''?'N/A':String(v)}function yn(v){return v?'<span class="ok">Configured</span>':'<span class="bad">Not configured</span>'}
+  async function api(p,o){const r=await fetch(p,o||{});const t=await r.text();let d;try{d=JSON.parse(t)}catch(e){d={raw:t}}if(!r.ok)throw new Error(d.error||t);return d}async function post(p,b){return api(p,{method:'POST',headers:h(),body:JSON.stringify(b||{})})}async function get(p){return api(p,{headers:h()})}
+  async function stats(){const d=await api('/stats'),s=d.stats||{};statCarriers.textContent=f(s.carriers);statLeads.textContent=f(s.leads);statHot.textContent=f(s.hot_leads);statReady.textContent=f(s.sales_ready_leads)}
+  async function admin(){const d=await get('/admin/config/status');who.textContent=f(d.admin.signedInAs);role.textContent=f(d.admin.role);agency.textContent=f(d.admin.agencyId);integrations.innerHTML='<tr><td>CRM Webhook</td><td>'+yn(d.integrations.arkonWebhookConfigured)+'</td></tr><tr><td>Sheets Webhook</td><td>'+yn(d.integrations.googleSheetsWebhookConfigured)+'</td></tr><tr><td>Texas API</td><td>'+yn(d.integrations.txComptrollerKeyConfigured)+'</td></tr><tr><td>Admin Auth</td><td>'+yn(d.integrations.adminApiKeyConfigured)+'</td></tr>'}
+  async function ready(){const d=await api('/leads?limit=5&minGrade=B&qualityGate=true'),rows=d.leads||[];readyRows.innerHTML=rows.length?rows.map(x=>'<tr><td>'+f(x.legal_name)+'</td><td>'+f(x.usdot_number)+'</td><td>'+f(x.lead_grade)+'</td><td>'+(x.sales_ready?'<span class="ok">Ready</span>':'<span class="bad">Blocked</span>')+'</td></tr>').join(''):'<tr><td colspan="4">No ready leads.</td></tr>'}
+  async function refresh(){await stats();await admin();await ready()}function show(){loginCard.classList.add('hidden');dashboard.classList.remove('hidden');sessionPill.textContent='Admin session active';sessionPill.classList.add('ok')}function hide(){dashboard.classList.add('hidden');loginCard.classList.remove('hidden');sessionPill.textContent='Not signed in';sessionPill.classList.remove('ok')}
+  async function login(){sessionStorage.setItem('FMCSA_ADMIN_KEY',keyInput.value.trim());try{await get('/admin/config/status');show();await refresh()}catch(e){sessionStorage.removeItem('FMCSA_ADMIN_KEY');loginStatus.textContent=e.message}}
+  async function run(label,fn){out(label+'...');try{const d=await fn();out(d);await refresh()}catch(e){out({ok:false,error:e.message})}}
+  loginBtn.onclick=login;clearBtn.onclick=()=>{keyInput.value='';sessionStorage.removeItem('FMCSA_ADMIN_KEY')};logoutBtn.onclick=()=>{sessionStorage.removeItem('FMCSA_ADMIN_KEY');hide()};refreshBtn.onclick=()=>run('Refreshing admin console',refresh);dbInitBtn.onclick=()=>run('Initializing database schema',()=>post('/admin/db/init',{}));importBtn.onclick=()=>run('Importing carriers',()=>post('/admin/import',{source:'company-census',limit:1000}));scoreBtn.onclick=()=>run('Refreshing scores',()=>post('/admin/score/refresh',{}));txBtn.onclick=()=>run('Running Texas verification',()=>post('/admin/enrich/texas',{limit:Number(txLimit.value)}));flBtn.onclick=()=>run('Running Florida verification',()=>post('/admin/enrich/fl',{limit:Number(flLimit.value)}));arkonBtn.onclick=()=>run('Testing CRM export',()=>post('/admin/export/arkon',{limit:1,minGrade:'B'}));sheetsBtn.onclick=()=>run('Testing Sheet export',()=>post('/admin/export/sheets',{limit:10,minGrade:'B'}));if(k()){show();refresh().catch(e=>out({ok:false,error:e.message}))}
+  </script></body></html>`;
 }
 
 app.get('/admin', (_req, res) => {
   res.type('html').send(adminPageHtml());
+});
+
+app.get('/admin/config/status', requireAdmin, (_req, res) => {
+  res.json({
+    ok: true,
+    admin: {
+      signedInAs: 'Verified administrator',
+      role: 'System Administrator',
+      agencyName: 'Invicta Capital Group',
+      agencyId: config.defaultAgencyId
+    },
+    integrations: {
+      adminApiKeyConfigured: Boolean(config.adminApiKey),
+      arkonWebhookConfigured: Boolean(config.arkonWebhookUrl),
+      googleSheetsWebhookConfigured: Boolean(config.googleSheetsWebhookUrl),
+      txComptrollerKeyConfigured: Boolean(config.txComptrollerApiKey)
+    }
+  });
 });
 
 app.get('/health', (_req, res) => {
