@@ -52,20 +52,48 @@ function registryInputsFromBody(body: unknown): StateRegistryRecordInput[] {
     }));
 }
 
+async function tableExists(tableName: string): Promise<boolean> {
+  const result = await query('select to_regclass($1) as table_name', [`public.${tableName}`]);
+  return Boolean(result.rows[0]?.table_name);
+}
+
+async function safeCount(tableName: string, whereClause = 'true'): Promise<number> {
+  if (!/^[_a-zA-Z][_a-zA-Z0-9]*$/.test(tableName)) return 0;
+  if (!(await tableExists(tableName))) return 0;
+  const result = await query(`select count(*)::int as count from ${tableName} where ${whereClause}`);
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+async function safeRecentImports() {
+  if (!(await tableExists('import_runs'))) return [];
+  const result = await query(`
+    select source, fetched_count, inserted_count, updated_count, started_at
+    from import_runs
+    order by started_at desc
+    limit 6
+  `);
+  return result.rows;
+}
+
+async function safeRecentStatePulls() {
+  if (!(await tableExists('state_registry_matches'))) return [];
+  const result = await query(`
+    select source_name, state_code, search_name, matched_name, entity_status, created_at
+    from state_registry_matches
+    order by created_at desc
+    limit 6
+  `);
+  return result.rows;
+}
+
 function adminPageHtml(): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Invicta Admin</title><style>
-  body{margin:0;background:#f5f7fb;color:#0f172a;font-family:Arial,Helvetica,sans-serif}.shell{display:grid;grid-template-columns:240px 1fr;min-height:100vh}.side{background:#0b1220;color:white;padding:22px}.side h1{font-size:17px;margin:0}.side p{color:#94a3b8;font-size:12px;line-height:1.5}.nav{margin-top:24px;display:grid;gap:8px}.nav div{padding:11px 12px;border-radius:12px;background:#111827;color:#cbd5e1}.nav .on{background:white;color:#0f172a;font-weight:800}.main{padding:26px;max-width:1200px}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.top h2{font-size:30px;margin:0 0 6px}.top p{margin:0;color:#64748b}.pill,.card{background:white;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 18px 45px rgba(15,23,42,.08)}.pill{padding:9px 13px;font-size:13px;color:#64748b}.card{padding:18px}.login{max-width:520px;margin:64px auto}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}.num{font-size:31px;font-weight:900}.label{color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.08em}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.info{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:12px}.box b{display:block;color:#64748b;font-size:12px;margin-bottom:5px}.box span{font-weight:800}button{border:0;background:#2563eb;color:white;border-radius:12px;padding:11px 13px;font-weight:800;cursor:pointer}button.secondary{background:white;color:#0f172a;border:1px solid #e2e8f0}.actions{display:grid;gap:9px}.row{display:grid;grid-template-columns:1fr 84px;gap:8px}input,select{width:100%;padding:11px;border:1px solid #e2e8f0;border-radius:12px}.hidden{display:none}.ok{color:#16a34a}.bad{color:#dc2626}.muted{color:#64748b;font-size:13px}pre{background:#0b1220;color:#cbd5e1;border-radius:14px;padding:12px;max-height:330px;overflow:auto;white-space:pre-wrap}.table{width:100%;border-collapse:collapse}.table td,.table th{border-bottom:1px solid #e2e8f0;padding:10px;text-align:left;font-size:13px}@media(max-width:900px){.shell{grid-template-columns:1fr}.side{display:none}.grid4,.grid2,.info{grid-template-columns:1fr}.top{display:block}}
-  </style></head><body><div class="shell"><aside class="side"><h1>Invicta Capital Group</h1><p>Administrator console</p><div class="nav"><div class="on">Admin Overview</div><div>Users & Roles</div><div>Agency Settings</div><div>Integrations</div><div>Data Jobs</div><div>Audit Output</div></div><p style="margin-top:24px">This page is for system administration, not agent lead work.</p></aside><main class="main"><div class="top"><div><h2>System Administration</h2><p>Signed-in admin, agency settings, integrations, database counts, and controlled jobs.</p></div><div class="pill" id="sessionPill">Not signed in</div></div><section class="card login" id="loginCard"><h2>Admin Login</h2><p class="muted">Enter the admin key to open the administrator console.</p><input id="adminKey" type="password" placeholder="Admin key"/><div style="display:flex;gap:10px;margin-top:12px"><button id="loginBtn">Open Admin Console</button><button class="secondary" id="clearBtn">Clear</button></div><p class="muted" id="loginStatus"></p></section><section id="dashboard" class="hidden"><div class="grid4"><div class="card"><div class="label">Carriers</div><div class="num" id="statCarriers">—</div></div><div class="card"><div class="label">Lead Rows</div><div class="num" id="statLeads">—</div></div><div class="card"><div class="label">Hot Leads</div><div class="num" id="statHot">—</div></div><div class="card"><div class="label">Ready Leads</div><div class="num" id="statReady">—</div></div></div><div class="grid2"><div class="card"><h3>Who is signed in</h3><div class="info"><div class="box"><b>Signed in as</b><span id="who">—</span></div><div class="box"><b>Role</b><span id="role">—</span></div><div class="box"><b>Agency</b><span>Invicta Capital Group</span></div><div class="box"><b>Agency ID</b><span id="agency">—</span></div></div><h3>Integration status</h3><table class="table"><tbody id="integrations"></tbody></table></div><div class="card"><h3>Administrator Operations</h3><div class="actions"><button class="secondary" id="refreshBtn">Refresh Admin Console</button><button class="secondary" id="dbInitBtn">Initialize Database Schema</button><button id="importBtn">Import 1,000 Carriers</button><button id="scoreBtn">Refresh Scores</button><div class="row"><button id="txBtn">Run Texas Verification</button><select id="txLimit"><option>10</option><option>25</option><option>50</option></select></div><div class="row"><button id="flBtn">Run Florida Verification</button><select id="flLimit"><option>10</option><option>25</option><option>50</option></select></div><button id="arkonBtn">Test CRM Export: 1 Lead</button><button id="sheetsBtn" class="secondary">Test Sheet Export: 10 Leads</button><button id="logoutBtn" style="background:#991b1b">Logout</button></div></div></div><div class="grid2" style="margin-top:14px"><div class="card"><h3>Quality Gate Snapshot</h3><table class="table"><thead><tr><th>Company</th><th>USDOT</th><th>Grade</th><th>Status</th></tr></thead><tbody id="readyRows"></tbody></table></div><div class="card"><h3>Admin Audit Output</h3><pre id="output">Ready.</pre></div></div></section></main></div><script>
-  const keyInput=document.getElementById('adminKey'),loginCard=document.getElementById('loginCard'),dashboard=document.getElementById('dashboard'),sessionPill=document.getElementById('sessionPill'),output=document.getElementById('output');
-  function k(){return sessionStorage.getItem('FMCSA_ADMIN_KEY')||''}function h(){return{'content-type':'application/json','x-admin-api-key':k()}}function out(v){output.textContent=typeof v==='string'?v:JSON.stringify(v,null,2)}function f(v){return v===null||v===undefined||v===''?'N/A':String(v)}function yn(v){return v?'<span class="ok">Configured</span>':'<span class="bad">Not configured</span>'}
-  async function api(p,o){const r=await fetch(p,o||{});const t=await r.text();let d;try{d=JSON.parse(t)}catch(e){d={raw:t}}if(!r.ok)throw new Error(d.error||t);return d}async function post(p,b){return api(p,{method:'POST',headers:h(),body:JSON.stringify(b||{})})}async function get(p){return api(p,{headers:h()})}
-  async function stats(){const d=await api('/stats'),s=d.stats||{};statCarriers.textContent=f(s.carriers);statLeads.textContent=f(s.leads);statHot.textContent=f(s.hot_leads);statReady.textContent=f(s.sales_ready_leads)}
-  async function admin(){const d=await get('/admin/config/status');who.textContent=f(d.admin.signedInAs);role.textContent=f(d.admin.role);agency.textContent=f(d.admin.agencyId);integrations.innerHTML='<tr><td>CRM Webhook</td><td>'+yn(d.integrations.arkonWebhookConfigured)+'</td></tr><tr><td>Sheets Webhook</td><td>'+yn(d.integrations.googleSheetsWebhookConfigured)+'</td></tr><tr><td>Texas API</td><td>'+yn(d.integrations.txComptrollerKeyConfigured)+'</td></tr><tr><td>Admin Auth</td><td>'+yn(d.integrations.adminApiKeyConfigured)+'</td></tr>'}
-  async function ready(){const d=await api('/leads?limit=5&minGrade=B&qualityGate=true'),rows=d.leads||[];readyRows.innerHTML=rows.length?rows.map(x=>'<tr><td>'+f(x.legal_name)+'</td><td>'+f(x.usdot_number)+'</td><td>'+f(x.lead_grade)+'</td><td>'+(x.sales_ready?'<span class="ok">Ready</span>':'<span class="bad">Blocked</span>')+'</td></tr>').join(''):'<tr><td colspan="4">No ready leads.</td></tr>'}
-  async function refresh(){await stats();await admin();await ready()}function show(){loginCard.classList.add('hidden');dashboard.classList.remove('hidden');sessionPill.textContent='Admin session active';sessionPill.classList.add('ok')}function hide(){dashboard.classList.add('hidden');loginCard.classList.remove('hidden');sessionPill.textContent='Not signed in';sessionPill.classList.remove('ok')}
-  async function login(){sessionStorage.setItem('FMCSA_ADMIN_KEY',keyInput.value.trim());try{await get('/admin/config/status');show();await refresh()}catch(e){sessionStorage.removeItem('FMCSA_ADMIN_KEY');loginStatus.textContent=e.message}}
-  async function run(label,fn){out(label+'...');try{const d=await fn();out(d);await refresh()}catch(e){out({ok:false,error:e.message})}}
-  loginBtn.onclick=login;clearBtn.onclick=()=>{keyInput.value='';sessionStorage.removeItem('FMCSA_ADMIN_KEY')};logoutBtn.onclick=()=>{sessionStorage.removeItem('FMCSA_ADMIN_KEY');hide()};refreshBtn.onclick=()=>run('Refreshing admin console',refresh);dbInitBtn.onclick=()=>run('Initializing database schema',()=>post('/admin/db/init',{}));importBtn.onclick=()=>run('Importing carriers',()=>post('/admin/import',{source:'company-census',limit:1000}));scoreBtn.onclick=()=>run('Refreshing scores',()=>post('/admin/score/refresh',{}));txBtn.onclick=()=>run('Running Texas verification',()=>post('/admin/enrich/texas',{limit:Number(txLimit.value)}));flBtn.onclick=()=>run('Running Florida verification',()=>post('/admin/enrich/fl',{limit:Number(flLimit.value)}));arkonBtn.onclick=()=>run('Testing CRM export',()=>post('/admin/export/arkon',{limit:1,minGrade:'B'}));sheetsBtn.onclick=()=>run('Testing Sheet export',()=>post('/admin/export/sheets',{limit:10,minGrade:'B'}));if(k()){show();refresh().catch(e=>out({ok:false,error:e.message}))}
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Invicta Admin Overview</title><style>
+  body{margin:0;background:#0b1220;color:#e2e8f0;font-family:Arial,Helvetica,sans-serif}.adm a{color:inherit;text-decoration:none}.topbar{border-bottom:1px solid #1e293b;padding:14px 24px;display:flex;align-items:center;justify-content:space-between}.brand{display:flex;align-items:center;gap:10px}.mark{width:30px;height:30px;background:#3b82f6;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}.links{display:flex;gap:18px;font-size:13px;color:#94a3b8;align-items:center;flex-wrap:wrap}.wrap{max-width:1200px;margin:0 auto;padding:32px 24px}.hero{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:24px}.eyebrow{color:#60a5fa;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}.hero h1{font-size:30px;line-height:1.1;font-weight:800;letter-spacing:-.03em;margin:0}.hero p{color:#64748b;font-size:14px;margin:9px 0 0}.card{background:#111a2b;border:1px solid #1e293b;border-radius:12px}.btn{display:inline-block;border:0;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-weight:700}.blue{background:#2563eb;color:#fff}.gray{background:#1e293b;color:#94a3b8;border:1px solid #283548}.red{background:#7f1d1d;color:#fecaca}.greenText{color:#4ade80}.redText{color:#f87171}.login{max-width:520px;margin:72px auto;padding:24px}.login input{width:100%;background:#16202f;border:1px solid #283548;border-radius:8px;padding:10px 12px;color:#e2e8f0}.login p,.muted{color:#64748b;font-size:13px}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:18px}.stat{display:block;padding:18px 20px;min-height:104px}.stat .num{font-size:34px;line-height:1;font-weight:800;letter-spacing:-.04em}.stat .label{font-size:13px;color:#cbd5e1;margin-top:14px;font-weight:700}.stat .helper{font-size:12px;color:#64748b;margin-top:4px}.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}.panel{padding:22px;min-height:270px}.panelHead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.panel h2{font-size:15px;margin:0;font-weight:800}.panel p{color:#64748b;font-size:12px;margin:5px 0 0}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;padding:10px 12px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;border-bottom:1px solid #1e293b}td{padding:12px;border-bottom:1px solid #16202f;vertical-align:middle}tr:hover td{background:#111f34}.ops{display:grid;gap:10px}.row{display:grid;grid-template-columns:1fr 90px;gap:8px}.row select{background:#16202f;border:1px solid #283548;border-radius:8px;color:#e2e8f0;padding:8px}.hidden{display:none}pre{background:#07111f;border:1px solid #1e293b;border-radius:12px;padding:12px;white-space:pre-wrap;max-height:340px;overflow:auto;color:#cbd5e1}@media(max-width:850px){.hero,.grid2{grid-template-columns:1fr;display:grid}.topbar{align-items:flex-start;gap:14px;flex-direction:column}.links{gap:10px}}
+  </style></head><body><div class="adm"><nav class="topbar"><div class="brand"><span class="mark">I</span><span style="font-weight:700;font-size:15px">Invicta Admin</span></div><div class="links"><span>Overview</span><span>Agencies</span><span>Agents</span><span>API Pulls</span><span>Integrations</span><span>Audit log</span><span id="sessionPill">Signed out</span></div></nav><main class="wrap"><section class="login card" id="loginCard"><div class="eyebrow">Secure access</div><h1>Admin Login</h1><p>Enter the admin key to view agency counts, agent counts, API pulls, integrations, and audit output.</p><input id="adminKey" type="password" placeholder="Admin key"/><div style="display:flex;gap:10px;margin-top:12px"><button class="btn blue" id="loginBtn">Open admin</button><button class="btn gray" id="clearBtn">Clear</button></div><p id="loginStatus"></p></section><section id="dashboard" class="hidden"><div class="hero"><div><div class="eyebrow">Control center</div><h1>Overview</h1><p>Monitor agencies, agents, API/data pulls, integrations, and recent platform activity from one clean view.</p></div><button class="btn red" id="logoutBtn">Logout</button></div><div class="stats"><div class="card stat"><div class="num" id="agencyCount">—</div><div class="label">Active agencies</div><div class="helper" id="agencyHelper">Insurance agencies in system</div></div><div class="card stat"><div class="num" id="agentCount">—</div><div class="label">Active agents</div><div class="helper" id="agentHelper">Approved production users</div></div><div class="card stat"><div class="num" id="apiPullCount">—</div><div class="label">API / data pulls</div><div class="helper">FMCSA imports plus registry pulls</div></div><div class="card stat"><div class="num" id="readyCount">—</div><div class="label">Ready leads</div><div class="helper">Quality-gated exportable records</div></div></div><div class="grid2"><section class="card panel"><div class="panelHead"><div><h2>Signed-in administrator</h2><p>Current admin session and agency context.</p></div></div><table><tbody id="adminRows"></tbody></table></section><section class="card panel"><div class="panelHead"><div><h2>Integration status</h2><p>Connection readiness for production operations.</p></div></div><table><tbody id="integrationRows"></tbody></table></section></div><div class="grid2" style="margin-top:18px"><section class="card panel"><div class="panelHead"><div><h2>Recent API / data pulls</h2><p>Latest FMCSA import and registry enrichment activity.</p></div><button class="btn gray" id="refreshBtn">Refresh</button></div><table><thead><tr><th>Source</th><th>Details</th><th>Date</th></tr></thead><tbody id="pullRows"></tbody></table></section><section class="card panel"><div class="panelHead"><div><h2>Administrator operations</h2><p>Controlled jobs. Agent lead work belongs outside this admin view.</p></div></div><div class="ops"><button class="btn gray" id="dbInitBtn">Initialize DB schema</button><button class="btn blue" id="importBtn">Import 1,000 carriers</button><button class="btn blue" id="scoreBtn">Refresh scores</button><div class="row"><button class="btn blue" id="txBtn">Run Texas verification</button><select id="txLimit"><option>10</option><option>25</option><option>50</option></select></div><div class="row"><button class="btn blue" id="flBtn">Run Florida verification</button><select id="flLimit"><option>10</option><option>25</option><option>50</option></select></div><button class="btn gray" id="arkonBtn">Test CRM export: 1 lead</button><button class="btn gray" id="sheetsBtn">Test sheet export: 10 leads</button></div></section></div><div class="grid2" style="margin-top:18px"><section class="card panel"><div class="panelHead"><div><h2>Quality gate snapshot</h2><p>Admin-level count check, not agent workflow.</p></div></div><table><thead><tr><th>Company</th><th>USDOT</th><th>Grade</th><th>Status</th></tr></thead><tbody id="readyRows"></tbody></table></section><section class="card panel"><div class="panelHead"><div><h2>Audit output</h2><p>Last admin action response.</p></div></div><pre id="output">Ready.</pre></section></div></section></main></div><script>
+  const loginCard=document.getElementById('loginCard'),dashboard=document.getElementById('dashboard'),output=document.getElementById('output');function k(){return sessionStorage.getItem('FMCSA_ADMIN_KEY')||''}function h(){return{'content-type':'application/json','x-admin-api-key':k()}}function f(v){return v===null||v===undefined||v===''?'N/A':String(v)}function yn(v){return v?'<span class="greenText">Configured</span>':'<span class="redText">Not configured</span>'}function out(v){output.textContent=typeof v==='string'?v:JSON.stringify(v,null,2)}async function api(p,o){const r=await fetch(p,o||{}),t=await r.text();let d;try{d=JSON.parse(t)}catch(e){d={raw:t}}if(!r.ok)throw new Error(d.error||t);return d}async function get(p){return api(p,{headers:h()})}async function post(p,b){return api(p,{method:'POST',headers:h(),body:JSON.stringify(b||{})})}function show(){loginCard.classList.add('hidden');dashboard.classList.remove('hidden');sessionPill.textContent='Signed in'}function hide(){dashboard.classList.add('hidden');loginCard.classList.remove('hidden');sessionPill.textContent='Signed out'}
+  async function load(){const d=await get('/admin/overview');const m=d.metrics;agencyCount.textContent=f(m.agencies.active);agentCount.textContent=f(m.agents.active);apiPullCount.textContent=f(m.apiPulls.total);readyCount.textContent=f(m.leads.salesReady);agencyHelper.textContent=m.agencies.tableExists?'Insurance agencies in system':'Agency table not created';agentHelper.textContent=m.agents.tableExists?'Approved production users':'Agent table not created';adminRows.innerHTML='<tr><td>Signed in as</td><td>'+f(d.admin.signedInAs)+'</td></tr><tr><td>Role</td><td>'+f(d.admin.role)+'</td></tr><tr><td>Agency</td><td>'+f(d.admin.agencyName)+'</td></tr><tr><td>Agency ID</td><td>'+f(d.admin.agencyId)+'</td></tr>';integrationRows.innerHTML='<tr><td>Admin auth</td><td>'+yn(d.integrations.adminApiKeyConfigured)+'</td></tr><tr><td>CRM webhook</td><td>'+yn(d.integrations.arkonWebhookConfigured)+'</td></tr><tr><td>Sheets webhook</td><td>'+yn(d.integrations.googleSheetsWebhookConfigured)+'</td></tr><tr><td>Texas API key</td><td>'+yn(d.integrations.txComptrollerKeyConfigured)+'</td></tr>';pullRows.innerHTML=(d.recentPulls||[]).length?d.recentPulls.map(x=>'<tr><td>'+f(x.source)+'</td><td>'+f(x.details)+'</td><td>'+f(x.date)+'</td></tr>').join(''):'<tr><td colspan="3">No pull history yet.</td></tr>';readyRows.innerHTML=(d.readyLeads||[]).length?d.readyLeads.map(x=>'<tr><td>'+f(x.legal_name)+'</td><td>'+f(x.usdot_number)+'</td><td>'+f(x.lead_grade)+'</td><td>'+(x.sales_ready?'<span class="greenText">Ready</span>':'<span class="redText">Blocked</span>')+'</td></tr>').join(''):'<tr><td colspan="4">No ready leads.</td></tr>'}
+  async function login(){sessionStorage.setItem('FMCSA_ADMIN_KEY',adminKey.value.trim());try{await get('/admin/overview');show();await load()}catch(e){sessionStorage.removeItem('FMCSA_ADMIN_KEY');loginStatus.textContent=e.message}}async function run(label,fn){out(label+'...');try{const d=await fn();out(d);await load()}catch(e){out({ok:false,error:e.message})}}
+  loginBtn.onclick=login;clearBtn.onclick=()=>{adminKey.value='';sessionStorage.removeItem('FMCSA_ADMIN_KEY')};logoutBtn.onclick=()=>{sessionStorage.removeItem('FMCSA_ADMIN_KEY');hide()};refreshBtn.onclick=()=>run('Refreshing admin overview',load);dbInitBtn.onclick=()=>run('Initializing schema',()=>post('/admin/db/init',{}));importBtn.onclick=()=>run('Importing carriers',()=>post('/admin/import',{source:'company-census',limit:1000}));scoreBtn.onclick=()=>run('Refreshing scores',()=>post('/admin/score/refresh',{}));txBtn.onclick=()=>run('Running Texas verification',()=>post('/admin/enrich/texas',{limit:Number(txLimit.value)}));flBtn.onclick=()=>run('Running Florida verification',()=>post('/admin/enrich/fl',{limit:Number(flLimit.value)}));arkonBtn.onclick=()=>run('Testing CRM export',()=>post('/admin/export/arkon',{limit:1,minGrade:'B'}));sheetsBtn.onclick=()=>run('Testing sheet export',()=>post('/admin/export/sheets',{limit:10,minGrade:'B'}));if(k()){show();load().catch(e=>out({ok:false,error:e.message}))}
   </script></body></html>`;
 }
 
@@ -73,15 +101,59 @@ app.get('/admin', (_req, res) => {
   res.type('html').send(adminPageHtml());
 });
 
+app.get('/admin/overview', requireAdmin, async (_req, res, next) => {
+  try {
+    const [agencyTable, agentTable, importRunsTable, registryTable] = await Promise.all([
+      tableExists('insurance_agencies'),
+      tableExists('insurance_agents'),
+      tableExists('import_runs'),
+      tableExists('state_registry_matches')
+    ]);
+    const [agencyCount, agentCount, carrierCount, leadCount, hotLeadCount, readyLeadCount, importRunCount, registryPullCount, recentImports, recentRegistry, readyLeads] = await Promise.all([
+      safeCount('insurance_agencies', "status = 'ACTIVE'"),
+      safeCount('insurance_agents', "status = 'ACTIVE'"),
+      safeCount('fmcsa_carriers'),
+      safeCount('insurance_leads'),
+      safeCount('insurance_leads', "lead_grade in ('A+', 'A')"),
+      safeCount('insurance_leads', 'sales_ready = true'),
+      safeCount('import_runs'),
+      safeCount('state_registry_matches'),
+      safeRecentImports(),
+      safeRecentStatePulls(),
+      getTopLeads(5, 'B', true)
+    ]);
+    const recentPulls = [
+      ...recentImports.map((row) => ({ source: row.source ?? 'FMCSA', details: `fetched ${row.fetched_count ?? 0}, inserted ${row.inserted_count ?? 0}, updated ${row.updated_count ?? 0}`, date: row.started_at })),
+      ...recentRegistry.map((row) => ({ source: `${row.source_name ?? 'STATE'} ${row.state_code ?? ''}`.trim(), details: `${row.search_name ?? row.matched_name ?? 'registry pull'} · ${row.entity_status ?? 'unknown'}`, date: row.created_at }))
+    ].sort((a, b) => String(b.date ?? '').localeCompare(String(a.date ?? ''))).slice(0, 8);
+    res.json({
+      ok: true,
+      admin: { signedInAs: 'Verified administrator', role: 'System Administrator', agencyName: 'Invicta Capital Group', agencyId: config.defaultAgencyId },
+      integrations: {
+        adminApiKeyConfigured: Boolean(config.adminApiKey),
+        arkonWebhookConfigured: Boolean(config.arkonWebhookUrl),
+        googleSheetsWebhookConfigured: Boolean(config.googleSheetsWebhookUrl),
+        txComptrollerKeyConfigured: Boolean(config.txComptrollerApiKey)
+      },
+      metrics: {
+        agencies: { active: agencyCount, tableExists: agencyTable },
+        agents: { active: agentCount, tableExists: agentTable },
+        apiPulls: { total: importRunCount + registryPullCount, importRuns: importRunCount, registryPulls: registryPullCount, importRunsTable, registryTable },
+        carriers: carrierCount,
+        leads: { total: leadCount, hot: hotLeadCount, salesReady: readyLeadCount }
+      },
+      recentPulls,
+      readyLeads
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/admin/config/status', requireAdmin, (_req, res) => {
   res.json({
     ok: true,
-    admin: {
-      signedInAs: 'Verified administrator',
-      role: 'System Administrator',
-      agencyName: 'Invicta Capital Group',
-      agencyId: config.defaultAgencyId
-    },
+    admin: { signedInAs: 'Verified administrator', role: 'System Administrator', agencyName: 'Invicta Capital Group', agencyId: config.defaultAgencyId },
     integrations: {
       adminApiKeyConfigured: Boolean(config.adminApiKey),
       arkonWebhookConfigured: Boolean(config.arkonWebhookUrl),
@@ -105,7 +177,6 @@ app.get('/admin/datasets/check', requireAdmin, async (req, res, next) => {
     const sources = requestedSource ? [requestedSource] : importSources;
     const invalid = sources.filter((source) => !importSources.includes(source));
     if (invalid.length) return res.status(400).json({ ok: false, error: `Invalid source: ${invalid.join(', ')}` });
-
     const results = await Promise.all(sources.map((source) => checkSocrataDataset(source)));
     res.json({ ok: true, results });
   } catch (error) {
@@ -154,12 +225,9 @@ app.get('/admin/enrichment/sources', requireAdmin, async (_req, res, next) => {
 app.post('/admin/enrich/state-records', requireAdmin, async (req, res, next) => {
   try {
     const records = registryInputsFromBody(req.body);
-    if (!records.length) {
-      return res.status(400).json({ ok: false, error: 'Provide stateCode, sourceName, and record or records[].' });
-    }
+    if (!records.length) return res.status(400).json({ ok: false, error: 'Provide stateCode, sourceName, and record or records[].' });
     const invalid = records.filter((record) => !record.stateCode || !record.sourceName);
     if (invalid.length) return res.status(400).json({ ok: false, error: 'stateCode and sourceName are required.' });
-
     const result = await ingestStateRegistryRecords(records);
     res.json(result);
   } catch (error) {
@@ -170,11 +238,7 @@ app.post('/admin/enrich/state-records', requireAdmin, async (req, res, next) => 
 app.post('/admin/enrich/texas', requireAdmin, async (req, res, next) => {
   try {
     const limit = Number.parseInt(String(req.body?.limit ?? config.texasEnrichmentLimit), 10);
-    const result = await enrichTexasCarriers({
-      limit: Number.isFinite(limit) ? limit : config.texasEnrichmentLimit,
-      usdotNumbers: stringArray(req.body?.usdotNumbers ?? req.body?.usdotNumber),
-      records: Array.isArray(req.body?.records) ? req.body.records : undefined
-    });
+    const result = await enrichTexasCarriers({ limit: Number.isFinite(limit) ? limit : config.texasEnrichmentLimit, usdotNumbers: stringArray(req.body?.usdotNumbers ?? req.body?.usdotNumber), records: Array.isArray(req.body?.records) ? req.body.records : undefined });
     res.json(result);
   } catch (error) {
     next(error);
@@ -184,11 +248,7 @@ app.post('/admin/enrich/texas', requireAdmin, async (req, res, next) => {
 app.post('/admin/enrich/fl', requireAdmin, async (req, res, next) => {
   try {
     const limit = Number.parseInt(String(req.body?.limit ?? 25), 10);
-    const result = await enrichFloridaCarriers({
-      limit: Number.isFinite(limit) ? limit : 25,
-      usdotNumbers: stringArray(req.body?.usdotNumbers ?? req.body?.usdotNumber),
-      records: Array.isArray(req.body?.records) ? req.body.records : undefined
-    });
+    const result = await enrichFloridaCarriers({ limit: Number.isFinite(limit) ? limit : 25, usdotNumbers: stringArray(req.body?.usdotNumbers ?? req.body?.usdotNumber), records: Array.isArray(req.body?.records) ? req.body.records : undefined });
     res.json(result);
   } catch (error) {
     next(error);
