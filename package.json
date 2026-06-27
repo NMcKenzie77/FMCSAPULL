@@ -13,6 +13,8 @@
     "score:refresh": "tsx src/index.ts score:refresh",
     "safer:refresh": "node --import ./dist/portal.js dist/safety/runSaferRefresh.js",
     "safer:refresh:dev": "tsx src/safety/runSaferRefresh.ts",
+    "li:refresh": "node --import ./dist/portal.js dist/safety/runInsuranceRefresh.js",
+    "li:refresh:dev": "tsx src/safety/runInsuranceRefresh.ts",
     "export:arkon": "tsx src/index.ts export:arkon",
     "export:sheets": "tsx src/index.ts export:sheets"
   },
