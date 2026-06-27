@@ -36,6 +36,8 @@ type CarrierInput = {
   docketPrefix?: string | null;
 };
 
+type HtmlResponse = { url: string; html: string; status: number };
+
 const LI_BASE = 'https://li-public.fmcsa.dot.gov/LIVIEW/';
 
 function clean(value: string | null | undefined): string | null {
@@ -88,24 +90,56 @@ function links(html: string): string[] {
   const values: string[] = [];
   const re = /href=["']([^"']+)["']/gi;
   let match: RegExpExecArray | null;
-  while ((match = re.exec(html))) {
-    values.push(absUrl(match[1]));
-  }
+  while ((match = re.exec(html))) values.push(absUrl(match[1]));
   return Array.from(new Set(values));
 }
 
 function parseApplicantId(html: string): string | null {
-  const fromHref = html.match(/pv_apcant_id=([0-9]+)/i)?.[1];
-  return fromHref || null;
+  return html.match(/pv_apcant_id=([0-9]+)/i)?.[1] || html.match(/p_apcant_id=([0-9]+)/i)?.[1] || null;
+}
+
+function endpoint(name: string, params?: URLSearchParams): string {
+  return `${LI_BASE}${name}${params ? `?${params.toString()}` : ''}`;
+}
+
+function searchUrls(input: CarrierInput): string[] {
+  const usdot = String(input.usdotNumber || '').replace(/\D/g, '');
+  const docket = String(input.docketNumber || '').replace(/\D/g, '');
+  const prefix = String(input.docketPrefix || 'MC').replace(/[^A-Z]/gi, '').toUpperCase() || 'MC';
+
+  const variants: URLSearchParams[] = [];
+  const add = (params: Record<string, string>) => variants.push(new URLSearchParams(params));
+
+  if (usdot) {
+    add({ p_dotno: usdot });
+    add({ pn_dotno: usdot });
+    add({ pv_dotno: usdot });
+  }
+  if (docket) {
+    add({ pn_docketno: docket, pv_pref_docket: prefix });
+    add({ p_docketno: docket, p_docketprefix: prefix });
+    add({ pv_docket_prefix: prefix, pn_docketno: docket, pv_pref_docket: prefix });
+  }
+
+  const procedures = ['PKG_CARRQUERY.PRC_CARRLIST', 'pkg_carrquery.prc_carrlist'];
+  return Array.from(new Set(procedures.flatMap((procedure) => variants.map((params) => endpoint(procedure, params)))));
 }
 
 function findInsuranceUrls(html: string, applicantId: string | null): string[] {
   const found = links(html).filter((url) => /insur|insurance|filing|carrierins/i.test(url));
   if (applicantId) {
-    found.push(`${LI_BASE}pkg_carrquery.prc_activeinsurance?pv_apcant_id=${encodeURIComponent(applicantId)}`);
-    found.push(`${LI_BASE}pkg_carrquery.prc_insurance?pv_apcant_id=${encodeURIComponent(applicantId)}`);
-    found.push(`${LI_BASE}pkg_carrquery.prc_insdetails?pv_apcant_id=${encodeURIComponent(applicantId)}`);
-    found.push(`${LI_BASE}pkg_carrquery.prc_getinscarrier?pv_apcant_id=${encodeURIComponent(applicantId)}`);
+    for (const procedure of [
+      'PKG_CARRQUERY.PRC_ACTIVEINSURANCE',
+      'PKG_CARRQUERY.PRC_INSURANCE',
+      'PKG_CARRQUERY.PRC_INSDETAILS',
+      'PKG_CARRQUERY.PRC_GETINSCARRIER',
+      'pkg_carrquery.prc_activeinsurance',
+      'pkg_carrquery.prc_insurance',
+      'pkg_carrquery.prc_insdetails',
+      'pkg_carrquery.prc_getinscarrier',
+    ]) {
+      found.push(endpoint(procedure, new URLSearchParams({ pv_apcant_id: applicantId })));
+    }
   }
   return Array.from(new Set(found));
 }
@@ -151,7 +185,6 @@ function parseFilingRow(row: string[]): CarrierInsuranceFiling | null {
 function parseInsuranceHtml(html: string): { filings: CarrierInsuranceFiling[]; rawText: string } {
   const rawText = stripTags(html).slice(0, 12000);
   const parsedRows = tableRows(html).map(parseFilingRow).filter((row): row is CarrierInsuranceFiling => Boolean(row));
-
   if (parsedRows.length) return { filings: parsedRows, rawText };
 
   const textCarrier = rawText.match(/(?:Insurance Carrier|Carrier Name|Company Name)\s*:?\s*([A-Z0-9 &'.,()-]{4,80}?)(?:\s{2,}| Policy| Form| Effective|$)/i)?.[1];
@@ -176,70 +209,72 @@ function parseInsuranceHtml(html: string): { filings: CarrierInsuranceFiling[]; 
   return { filings: [], rawText };
 }
 
-function searchUrl(input: CarrierInput): string {
-  const usdot = String(input.usdotNumber || '').replace(/\D/g, '');
-  const docket = String(input.docketNumber || '').replace(/\D/g, '');
-  const prefix = String(input.docketPrefix || 'MC').replace(/[^A-Z]/gi, '').toUpperCase() || 'MC';
-  const params = new URLSearchParams();
-  if (usdot) params.set('p_dotno', usdot);
-  if (docket) {
-    params.set('pn_docketno', docket);
-    params.set('pv_docket_prefix', prefix);
-    params.set('pv_pref_docket', prefix);
-  }
-  return `${LI_BASE}pkg_carrquery.prc_carrlist?${params.toString()}`;
-}
-
-async function fetchHtml(url: string): Promise<string> {
+async function fetchHtml(url: string): Promise<HtmlResponse> {
   const response = await fetch(url, {
     headers: {
       accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'user-agent': 'ARKON-FMCSAPULL/1.0 carrier-insurance-profile',
+      'user-agent': 'ARKON-FMCSAPULL/1.0 carrier-li-profile',
     },
   });
   const html = await response.text();
-  if (!response.ok) throw new Error(`FMCSA L&I returned ${response.status}`);
-  return html;
+  return { url, html, status: response.status };
+}
+
+async function fetchFirstAvailable(urls: string[], notes: string[]): Promise<HtmlResponse | null> {
+  for (const url of urls) {
+    try {
+      const result = await fetchHtml(url);
+      notes.push(`L&I probe ${result.status}: ${url}`);
+      if (result.status >= 200 && result.status < 300) return result;
+    } catch (error) {
+      notes.push(`L&I probe failed: ${url} :: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return null;
 }
 
 export async function fetchCarrierInsuranceProfile(input: CarrierInput): Promise<CarrierInsuranceProfile> {
   const usdotNumber = String(input.usdotNumber || '').replace(/\D/g, '') || null;
   const docketNumber = String(input.docketNumber || '').replace(/\D/g, '') || null;
   const docketPrefix = input.docketPrefix || null;
-  const url = searchUrl(input);
   const pulledAt = new Date().toISOString();
   const notes: string[] = [];
+  const urls = searchUrls(input);
+  const searchResult = await fetchFirstAvailable(urls, notes);
+  const searchUrl = searchResult?.url || urls[0] || LI_BASE;
 
-  const searchHtml = await fetchHtml(url);
+  if (!searchResult) {
+    return { source: 'FMCSA_LI_PUBLIC', pulledAt, status: 'ERROR', usdotNumber, docketNumber, docketPrefix, currentCarrier: null, currentPolicyNumber: null, currentFormType: null, effectiveDate: null, cancellationDate: null, filings: [], searchUrl, detailUrl: null, insuranceUrl: null, notes: ['No FMCSA L&I route returned HTTP 200.', ...notes], rawText: '' };
+  }
+
+  const searchHtml = searchResult.html;
   const searchText = stripTags(searchHtml);
   if (/challenge question|captcha|verification/i.test(searchText) && !/Insurance|BMC|Policy/i.test(searchText)) {
-    return { source: 'FMCSA_LI_PUBLIC', pulledAt, status: 'SEARCH_BLOCKED', usdotNumber, docketNumber, docketPrefix, currentCarrier: null, currentPolicyNumber: null, currentFormType: null, effectiveDate: null, cancellationDate: null, filings: [], searchUrl: url, detailUrl: null, insuranceUrl: null, notes: ['FMCSA L&I search returned a verification challenge.'], rawText: searchText.slice(0, 12000) };
+    return { source: 'FMCSA_LI_PUBLIC', pulledAt, status: 'SEARCH_BLOCKED', usdotNumber, docketNumber, docketPrefix, currentCarrier: null, currentPolicyNumber: null, currentFormType: null, effectiveDate: null, cancellationDate: null, filings: [], searchUrl, detailUrl: null, insuranceUrl: null, notes: ['FMCSA L&I search returned a verification challenge.', ...notes], rawText: searchText.slice(0, 12000) };
   }
 
   const applicantId = parseApplicantId(searchHtml);
-  const detailUrl = applicantId ? `${LI_BASE}pkg_carrquery.prc_getdetail?pv_apcant_id=${encodeURIComponent(applicantId)}` : null;
-  let htmls = [searchHtml];
+  const detailCandidates = applicantId
+    ? [
+        endpoint('PKG_CARRQUERY.PRC_GETDETAIL', new URLSearchParams({ pv_apcant_id: applicantId })),
+        endpoint('pkg_carrquery.prc_getdetail', new URLSearchParams({ pv_apcant_id: applicantId })),
+      ]
+    : [];
+  const detailResult = detailCandidates.length ? await fetchFirstAvailable(detailCandidates, notes) : null;
+  const detailUrl = detailResult?.url || null;
+  const htmls = [searchHtml];
+  if (detailResult) htmls.push(detailResult.html);
   let insuranceUrl: string | null = null;
 
-  if (detailUrl) {
-    try {
-      const detailHtml = await fetchHtml(detailUrl);
-      htmls.push(detailHtml);
-      for (const candidate of findInsuranceUrls(detailHtml, applicantId)) {
-        try {
-          const candidateHtml = await fetchHtml(candidate);
-          htmls.push(candidateHtml);
-          const candidateParsed = parseInsuranceHtml(candidateHtml);
-          if (candidateParsed.filings.length) {
-            insuranceUrl = candidate;
-            break;
-          }
-        } catch (error) {
-          notes.push(`Could not read L&I candidate page: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }
-    } catch (error) {
-      notes.push(`Could not read L&I detail page: ${error instanceof Error ? error.message : String(error)}`);
+  const insuranceCandidates = findInsuranceUrls(detailResult?.html || searchHtml, applicantId);
+  for (const candidate of insuranceCandidates) {
+    const result = await fetchFirstAvailable([candidate], notes);
+    if (!result) continue;
+    htmls.push(result.html);
+    const parsed = parseInsuranceHtml(result.html);
+    if (parsed.filings.length) {
+      insuranceUrl = result.url;
+      break;
     }
   }
 
@@ -264,7 +299,7 @@ export async function fetchCarrierInsuranceProfile(input: CarrierInput): Promise
     effectiveDate: current?.effectiveDate || null,
     cancellationDate: current?.cancellationDate || null,
     filings: uniqueFilings,
-    searchUrl: url,
+    searchUrl,
     detailUrl,
     insuranceUrl,
     notes,
