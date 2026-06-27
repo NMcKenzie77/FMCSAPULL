@@ -1,1 +1,3 @@
-export const portalVersion = '1';
+import './u2.js';
+
+export const portalVersion = '2';
