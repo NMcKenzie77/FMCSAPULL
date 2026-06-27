@@ -4,6 +4,7 @@ import { query, withTransaction } from './db.js';
 import { normalizeCarrier, type NormalizedCarrier } from './fmcsa/normalize.js';
 import { fetchSocrataRecords } from './fmcsa/socrata.js';
 import { scoreCarrier } from './leads/score.js';
+import { upsertCarrierSafetyProfile } from './safety/profile.js';
 
 export interface ImportResult {
   runId: number;
@@ -166,6 +167,7 @@ export async function importFmcsa(source: ImportSource = config.defaultImportSou
         if (saved.inserted) insertedCount += 1;
         else updatedCount += 1;
         await upsertLead(client, saved.carrierId, carrier);
+        await upsertCarrierSafetyProfile(client, saved.carrierId, carrier as unknown as Record<string, unknown>);
         leadCount += 1;
       }
     });
@@ -245,6 +247,7 @@ export async function refreshScores(): Promise<{ refreshed: number }> {
         raw: row.raw ?? {}
       };
       await upsertLead(client, Number(row.id), carrier);
+      await upsertCarrierSafetyProfile(client, Number(row.id), row as unknown as Record<string, unknown>);
     }
   });
 
