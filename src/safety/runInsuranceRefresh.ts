@@ -1,11 +1,15 @@
 import { closePool, initSchema, query } from '../db.js';
-import { upsertCarrierSafetyProfile, type CarrierSafetyProfile } from './profile.js';
-import { fetchCarrierInsuranceProfile } from './insurance.js';
+import { fetchCarrierInsuranceProfile, type CarrierInsuranceProfile } from './insurance.js';
+
+type CarrierSafetyProfile = Record<string, unknown> & {
+  raw?: Record<string, unknown> | null;
+};
 
 type CarrierRow = Record<string, unknown> & {
   id: string;
   usdot_number: string;
   safety_raw?: Record<string, unknown> | null;
+  safety_profile?: CarrierSafetyProfile | null;
 };
 
 type InsuranceResult = {
@@ -37,12 +41,62 @@ function docketNumber(row: CarrierRow): string | null {
   return text(row.docket1) || text(row.docket_number) || text(row.mc_mx_ff_number);
 }
 
+function emptyInsurance(row: CarrierRow, status: 'ERROR' | 'NO_FILING_FOUND' | 'SEARCH_BLOCKED', note: string): CarrierInsuranceProfile {
+  return {
+    source: 'FMCSA_LI_PUBLIC',
+    pulledAt: new Date().toISOString(),
+    status,
+    usdotNumber: String(row.usdot_number || '').replace(/\D/g, '') || null,
+    docketNumber: docketNumber(row),
+    docketPrefix: docketPrefix(row),
+    currentCarrier: null,
+    currentPolicyNumber: null,
+    currentFormType: null,
+    effectiveDate: null,
+    cancellationDate: null,
+    filings: [],
+    searchUrl: '',
+    detailUrl: null,
+    insuranceUrl: null,
+    notes: [note],
+    rawText: '',
+  };
+}
+
+function mergeInsuranceProfile(row: CarrierRow, insurance: CarrierInsuranceProfile): CarrierSafetyProfile {
+  const existingProfile = rawObject(row.safety_profile) as CarrierSafetyProfile;
+  const existingRaw = rawObject(row.safety_raw || existingProfile.raw);
+  const mergedRaw = {
+    ...existingRaw,
+    insurance,
+    insurance_checked_at: new Date().toISOString(),
+  };
+  return {
+    ...existingProfile,
+    raw: mergedRaw,
+  };
+}
+
+async function saveInsuranceProfile(row: CarrierRow, insurance: CarrierInsuranceProfile): Promise<CarrierSafetyProfile> {
+  const profile = mergeInsuranceProfile(row, insurance);
+  const raw = rawObject(profile.raw);
+  await query(
+    `update carrier_safety_profiles
+        set profile_json = $2::jsonb,
+            raw_json = $3::jsonb,
+            updated_at = now()
+      where carrier_id = $1`,
+    [Number(row.id), JSON.stringify(profile), JSON.stringify(raw)]
+  );
+  return profile;
+}
+
 async function carriersForInsuranceRefresh(limit: number, usdotNumbers: string[]): Promise<CarrierRow[]> {
   if (usdotNumbers.length) {
     const result = await query<CarrierRow>(
-      `select c.*, sp.raw_json as safety_raw
+      `select c.*, sp.raw_json as safety_raw, sp.profile_json as safety_profile
          from fmcsa_carriers c
-         left join carrier_safety_profiles sp on sp.carrier_id = c.id
+         join carrier_safety_profiles sp on sp.carrier_id = c.id
         where c.usdot_number = any($1::text[])
         order by c.last_seen_at desc`,
       [usdotNumbers]
@@ -51,12 +105,12 @@ async function carriersForInsuranceRefresh(limit: number, usdotNumbers: string[]
   }
 
   const result = await query<CarrierRow>(
-    `select c.*, sp.raw_json as safety_raw
+    `select c.*, sp.raw_json as safety_raw, sp.profile_json as safety_profile
        from fmcsa_carriers c
-       left join carrier_safety_profiles sp on sp.carrier_id = c.id
+       join carrier_safety_profiles sp on sp.carrier_id = c.id
       where sp.raw_json is null
          or sp.raw_json->'insurance' is null
-      order by case when sp.id is null then 0 else 1 end, c.last_seen_at desc
+      order by c.last_seen_at desc
       limit $1`,
     [limit]
   );
@@ -77,12 +131,7 @@ export async function refreshCarrierInsuranceProfiles(options: { limit?: number;
         docketNumber: docketNumber(carrier),
         docketPrefix: docketPrefix(carrier),
       });
-      const mergedRaw = {
-        ...rawObject(carrier.safety_raw),
-        insurance,
-        insurance_checked_at: new Date().toISOString(),
-      };
-      const profile = await upsertCarrierSafetyProfile({ query }, Number(carrier.id), { ...carrier, raw: mergedRaw });
+      const profile = await saveInsuranceProfile(carrier, insurance);
       results.push({
         usdotNumber,
         ok: insurance.status === 'FOUND',
@@ -94,27 +143,9 @@ export async function refreshCarrierInsuranceProfiles(options: { limit?: number;
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      const mergedRaw = {
-        ...rawObject(carrier.safety_raw),
-        insurance: {
-          source: 'FMCSA_LI_PUBLIC',
-          pulledAt: new Date().toISOString(),
-          status: 'ERROR',
-          usdotNumber,
-          docketNumber: docketNumber(carrier),
-          docketPrefix: docketPrefix(carrier),
-          currentCarrier: null,
-          currentPolicyNumber: null,
-          currentFormType: null,
-          effectiveDate: null,
-          cancellationDate: null,
-          filings: [],
-          notes: [errorMessage],
-        },
-        insurance_checked_at: new Date().toISOString(),
-      };
-      await upsertCarrierSafetyProfile({ query }, Number(carrier.id), { ...carrier, raw: mergedRaw });
-      results.push({ usdotNumber, ok: false, status: 'ERROR', error: errorMessage });
+      const insurance = emptyInsurance(carrier, 'ERROR', errorMessage);
+      const profile = await saveInsuranceProfile(carrier, insurance);
+      results.push({ usdotNumber, ok: false, status: 'ERROR', error: errorMessage, profile });
     }
   }
 
