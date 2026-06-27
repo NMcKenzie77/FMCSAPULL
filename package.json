@@ -5,9 +5,9 @@
   "type": "module",
   "description": "Railway service for importing FMCSA/DOT trucking insurance leads and scoring them for P&C, life, and health outreach.",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --import ./src/portal.js src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node --import ./dist/portal.js dist/server.js",
     "import": "tsx src/index.ts import",
     "db:init": "tsx src/index.ts db:init",
     "score:refresh": "tsx src/index.ts score:refresh",
