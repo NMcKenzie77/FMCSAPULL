@@ -39,6 +39,60 @@ type SaferSnapshot = {
 
 type SaferResult = { usdotNumber: string; ok: boolean; profile?: CarrierSafetyProfile; error?: string };
 
+type InspectionStats = {
+  vehicleInspections: number | null;
+  driverInspections: number | null;
+  hazmatInspections: number | null;
+  vehicleOutOfService: number | null;
+  driverOutOfService: number | null;
+  hazmatOutOfService: number | null;
+  vehicleOutOfServiceRate: number | null;
+  driverOutOfServiceRate: number | null;
+  hazmatOutOfServiceRate: number | null;
+  nationalVehicleOutOfServiceRate: number | null;
+  nationalDriverOutOfServiceRate: number | null;
+};
+
+type CrashStats = {
+  totalCrashes: number | null;
+  fatalCrashes: number | null;
+  injuryCrashes: number | null;
+  towAwayCrashes: number | null;
+};
+
+const CARGO_LABELS = [
+  'General Freight',
+  'Household Goods',
+  'Metal: sheets, coils, rolls',
+  'Motor Vehicles',
+  'Drive/Tow away',
+  'Logs, Poles, Beams, Lumber',
+  'Building Materials',
+  'Mobile Homes',
+  'Machinery, Large Objects',
+  'Fresh Produce',
+  'Liquids/Gases',
+  'Intermodal Cont.',
+  'Passengers',
+  'Oilfield Equipment',
+  'Livestock',
+  'Grain, Feed, Hay',
+  'Coal/Coke',
+  'Meat',
+  'Garbage/Refuse',
+  'US Mail',
+  'Chemicals',
+  'Commodities Dry Bulk',
+  'Refrigerated Food',
+  'Beverages',
+  'Paper Products',
+  'Utilities',
+  'Agricultural/Farm Supplies',
+  'Construction',
+  'Water Well',
+  'PETROLEUM',
+];
+
 function stripTags(html: string) {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -49,6 +103,8 @@ function stripTags(html: string) {
     .replace(/&amp;/gi, '&')
     .replace(/&#39;/g, "'")
     .replace(/&quot;/gi, '"')
+    .replace(/&#160;/g, ' ')
+    .replace(/&#8226;/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -64,19 +120,25 @@ function tableCells(html: string): string[] {
   return cells;
 }
 
-function tableRows(html: string): string[][] {
-  const rows: string[][] = [];
-  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = rowRe.exec(html))) {
-    const cells = tableCells(match[1]);
-    if (cells.length) rows.push(cells);
-  }
-  return rows;
-}
-
 function cleanLabel(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeValue(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const cleaned = value
+    .replace(/SAFER Layout/gi, ' ')
+    .replace(/SAFER Table Layout/gi, ' ')
+    .replace(/For Licensing and Insurance details click here\.?/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned || /^(none|n\/a|na|null|--|not available)$/i.test(cleaned)) return null;
+  if (/^(physical address|phone|mailing address|duns number)$/i.test(cleaned.replace(/:$/, ''))) return null;
+  return cleaned;
 }
 
 function findCellValue(cells: string[], labels: string[]): string | null {
@@ -85,7 +147,7 @@ function findCellValue(cells: string[], labels: string[]): string | null {
     const cell = cleanLabel(cells[i]);
     if (normalizedLabels.some((label) => cell === label || cell.includes(label))) {
       for (let j = i + 1; j < Math.min(i + 4, cells.length); j += 1) {
-        const value = cells[j]?.trim();
+        const value = normalizeValue(cells[j]);
         if (value && !normalizedLabels.includes(cleanLabel(value))) return value;
       }
     }
@@ -93,23 +155,52 @@ function findCellValue(cells: string[], labels: string[]): string | null {
   return null;
 }
 
-function parseNumber(value: string | null): number | null {
+function findTextValue(rawText: string, label: string, stopLabels: string[]): string | null {
+  const labelPattern = new RegExp(`${escapeRegex(label)}:\\s*`, 'i');
+  const match = labelPattern.exec(rawText);
+  if (!match) return null;
+  const rest = rawText.slice(match.index + match[0].length);
+  let end = rest.length;
+  for (const stopLabel of stopLabels) {
+    const stopWithColon = rest.search(new RegExp(`\\s${escapeRegex(stopLabel)}:\\s*`, 'i'));
+    if (stopWithColon >= 0) end = Math.min(end, stopWithColon);
+    const stopBare = rest.toLowerCase().indexOf(` ${stopLabel.toLowerCase()} `);
+    if (stopBare >= 0) end = Math.min(end, stopBare);
+  }
+  return normalizeValue(rest.slice(0, end));
+}
+
+function textSection(rawText: string, start: string, end: string): string {
+  const startIndex = rawText.toLowerCase().indexOf(start.toLowerCase());
+  if (startIndex < 0) return '';
+  const rest = rawText.slice(startIndex);
+  const endIndex = rest.toLowerCase().indexOf(end.toLowerCase());
+  return endIndex >= 0 ? rest.slice(0, endIndex) : rest;
+}
+
+function parseNumber(value: string | null | undefined): number | null {
   if (!value) return null;
-  const match = value.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+  const cleaned = normalizeValue(value);
+  if (!cleaned) return null;
+  const match = cleaned.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
   if (!match) return null;
   const n = Number(match[0]);
   return Number.isFinite(n) ? n : null;
 }
 
-function parseRate(value: string | null): number | null {
+function parseRate(value: string | null | undefined): number | null {
   return parseNumber(value);
 }
 
-function parseDate(value: string | null): string | null {
-  if (!value) return null;
-  const cleaned = value.replace(/\s+/g, ' ').trim();
+function parseDate(value: string | null | undefined): string | null {
+  const cleaned = normalizeValue(value);
+  if (!cleaned) return null;
+  const mdy = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`;
+  const ymd = cleaned.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (ymd) return `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
   const parsed = new Date(cleaned);
-  if (Number.isNaN(parsed.getTime())) return cleaned;
+  if (Number.isNaN(parsed.getTime())) return null;
   return parsed.toISOString().slice(0, 10);
 }
 
@@ -121,71 +212,108 @@ function parseMileage(value: string | null): { mileage: number | null; year: str
 
 function splitList(value: string | null): string[] {
   if (!value) return [];
-  return value.split(/[,;|]/).map((item) => item.trim()).filter(Boolean);
+  return value.split(/[,;|]/).map((item) => normalizeValue(item)).filter((item): item is string => Boolean(item));
 }
 
-function findInspectionRow(rows: string[][], label: string): string[] | null {
-  const target = cleanLabel(label);
-  return rows.find((row) => cleanLabel(row[0] || '').includes(target)) ?? null;
-}
-
-function findCrashValue(rows: string[][], label: string): number | null {
-  const target = cleanLabel(label);
-  const row = rows.find((item) => cleanLabel(item[0] || '').includes(target));
-  if (!row) return null;
-  for (let i = 1; i < row.length; i += 1) {
-    const parsed = parseNumber(row[i]);
-    if (parsed !== null) return parsed;
+function parseCargo(rawText: string, fallback: string | null): string[] {
+  const section = textSection(rawText, 'Cargo Carried:', 'ID/Operations | Inspections/Crashes In US');
+  const selected: string[] = [];
+  for (const label of CARGO_LABELS) {
+    const pattern = new RegExp(`(?:^|\\s)X\\s+${escapeRegex(label)}(?:\\s|$)`, 'i');
+    if (pattern.test(section)) selected.push(label === 'PETROLEUM' ? 'Petroleum' : label);
   }
-  return null;
+  return selected.length ? selected : splitList(fallback).filter((item) => !/safer layout/i.test(item));
+}
+
+function parseInspectionStats(rawText: string): InspectionStats {
+  const section = textSection(rawText, 'US Inspection results', 'Canadian Inspection results');
+  const inspections = section.match(/Inspection Type\s+Vehicle\s+Driver\s+Hazmat\s+IEP\s+Inspections\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)/i);
+  const outOfService = section.match(/Out of Service\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)/i);
+  const rateSegment = section.match(/Out of Service %\s+([\s\S]*?)Nat'?l Average/i)?.[1] ?? '';
+  const rates = (rateSegment.match(/\d+(?:\.\d+)?\s*%/g) || []).map(parseRate);
+  const natSegment = section.match(/Nat'?l Average[\s\S]*?\*\s*([\s\S]*?)\*OOS/i)?.[1] ?? '';
+  const natRates = (natSegment.match(/\d+(?:\.\d+)?\s*%/g) || []).map(parseRate);
+  const vehicleInspections = parseNumber(inspections?.[1]);
+  const driverInspections = parseNumber(inspections?.[2]);
+  const hazmatInspections = parseNumber(inspections?.[3]);
+
+  return {
+    vehicleInspections,
+    driverInspections,
+    hazmatInspections,
+    vehicleOutOfService: parseNumber(outOfService?.[1]),
+    driverOutOfService: parseNumber(outOfService?.[2]),
+    hazmatOutOfService: parseNumber(outOfService?.[3]),
+    vehicleOutOfServiceRate: rates[0] ?? null,
+    driverOutOfServiceRate: rates[1] ?? null,
+    hazmatOutOfServiceRate: hazmatInspections === 0 && rates.length === 3 ? null : rates[2] ?? null,
+    nationalVehicleOutOfServiceRate: natRates[0] ?? null,
+    nationalDriverOutOfServiceRate: natRates[1] ?? null,
+  };
+}
+
+function parseCrashStats(rawText: string): CrashStats {
+  const section = textSection(rawText, 'Crashes reported to FMCSA by states', 'ID/Operations | Inspections/Crashes In Canada');
+  const match = section.match(/Crashes:\s*Type\s+Fatal\s+Injury\s+Tow\s+Total\s+Crashes\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)/i);
+  return {
+    fatalCrashes: parseNumber(match?.[1]),
+    injuryCrashes: parseNumber(match?.[2]),
+    towAwayCrashes: parseNumber(match?.[3]),
+    totalCrashes: parseNumber(match?.[4]),
+  };
+}
+
+function parseSafetyRating(rawText: string, cells: string[]): { rating: string | null; ratingDate: string | null } {
+  const ratingMatch = rawText.match(/Rating:\s*(Satisfactory|Conditional|Unsatisfactory|Not Rated|Unrated|None|Non-Ratable)/i);
+  const date = parseDate(findTextValue(rawText, 'Rating Date', ['Review Date', 'Rating', 'Type']))
+    || parseDate(findCellValue(cells, ['Rating Date', 'Safety Rating Date']))
+    || parseDate(findTextValue(rawText, 'Review Date', ['Rating', 'Type']));
+  return {
+    rating: normalizeValue(ratingMatch?.[1]) || findCellValue(cells, ['Safety Rating']),
+    ratingDate: date,
+  };
 }
 
 function parseSaferSnapshot(html: string, usdotNumber: string, snapshotUrl: string): SaferSnapshot {
   const cells = tableCells(html);
-  const rows = tableRows(html);
-  const mileage = parseMileage(findCellValue(cells, ['MCS-150 Mileage', 'MCS 150 Mileage']));
-  const driverRow = findInspectionRow(rows, 'Driver');
-  const vehicleRow = findInspectionRow(rows, 'Vehicle');
-  const hazmatRow = findInspectionRow(rows, 'Hazmat');
-  const fatalCrashes = findCrashValue(rows, 'Fatal');
-  const injuryCrashes = findCrashValue(rows, 'Injury');
-  const towAwayCrashes = findCrashValue(rows, 'Tow');
-  const totalCrashValue = [fatalCrashes, injuryCrashes, towAwayCrashes].some((value) => value !== null)
-    ? (fatalCrashes ?? 0) + (injuryCrashes ?? 0) + (towAwayCrashes ?? 0)
-    : parseNumber(findCellValue(cells, ['Crashes', 'Total Crashes']));
+  const rawText = stripTags(html);
+  const mileage = parseMileage(findTextValue(rawText, 'MCS-150 Mileage (Year)', ['OPERATING AUTHORITY INFORMATION']) || findCellValue(cells, ['MCS-150 Mileage', 'MCS 150 Mileage']));
+  const inspections = parseInspectionStats(rawText);
+  const crashes = parseCrashStats(rawText);
+  const rating = parseSafetyRating(rawText, cells);
 
   return {
     usdotNumber,
-    legalName: findCellValue(cells, ['Legal Name']),
-    dbaName: findCellValue(cells, ['DBA Name']),
-    operatingStatus: findCellValue(cells, ['Operating Status', 'Entity Type']),
-    authorityStatus: findCellValue(cells, ['Authority Status', 'Operating Authority Status']),
-    safetyRating: findCellValue(cells, ['Safety Rating']),
-    safetyRatingDate: parseDate(findCellValue(cells, ['Review Date', 'Rating Date', 'Safety Rating Date'])),
-    mcs150Date: parseDate(findCellValue(cells, ['MCS-150 Form Date', 'MCS 150 Form Date'])),
+    legalName: findTextValue(rawText, 'Legal Name', ['DBA Name', 'Physical Address']) || findCellValue(cells, ['Legal Name']),
+    dbaName: findTextValue(rawText, 'DBA Name', ['Physical Address', 'Phone', 'Mailing Address']) || findCellValue(cells, ['DBA Name']),
+    operatingStatus: findTextValue(rawText, 'USDOT Status', ['Out of Service Date', 'USDOT Number']) || findTextValue(rawText, 'Entity Type', ['New Entrant Status', 'USDOT Status']) || findCellValue(cells, ['Operating Status', 'Entity Type']),
+    authorityStatus: findTextValue(rawText, 'Operating Authority Status', ['MC/MX/FF Number(s)', 'COMPANY INFORMATION']) || findCellValue(cells, ['Authority Status', 'Operating Authority Status']),
+    safetyRating: rating.rating,
+    safetyRatingDate: rating.ratingDate,
+    mcs150Date: parseDate(findTextValue(rawText, 'MCS-150 Form Date', ['MCS-150 Mileage', 'OPERATING AUTHORITY INFORMATION']) || findCellValue(cells, ['MCS-150 Form Date', 'MCS 150 Form Date'])),
     mcs150Mileage: mileage.mileage,
     mcs150MileageYear: mileage.year,
-    powerUnits: parseNumber(findCellValue(cells, ['Power Units'])),
-    drivers: parseNumber(findCellValue(cells, ['Drivers'])),
-    cargoCarried: splitList(findCellValue(cells, ['Cargo Carried'])),
-    driverInspections: parseNumber(driverRow?.[1] ?? null),
-    driverOutOfService: parseNumber(driverRow?.[2] ?? null),
-    driverOutOfServiceRate: parseRate(driverRow?.[3] ?? null),
-    nationalDriverOutOfServiceRate: parseRate(driverRow?.[4] ?? null),
-    vehicleInspections: parseNumber(vehicleRow?.[1] ?? null),
-    vehicleOutOfService: parseNumber(vehicleRow?.[2] ?? null),
-    vehicleOutOfServiceRate: parseRate(vehicleRow?.[3] ?? null),
-    nationalVehicleOutOfServiceRate: parseRate(vehicleRow?.[4] ?? null),
-    hazmatInspections: parseNumber(hazmatRow?.[1] ?? null),
-    hazmatOutOfService: parseNumber(hazmatRow?.[2] ?? null),
-    hazmatOutOfServiceRate: parseRate(hazmatRow?.[3] ?? null),
-    totalCrashes: totalCrashValue,
-    fatalCrashes,
-    injuryCrashes,
-    towAwayCrashes,
+    powerUnits: parseNumber(findTextValue(rawText, 'Power Units', ['Non-CMV Units', 'Drivers']) || findCellValue(cells, ['Power Units'])),
+    drivers: parseNumber(findTextValue(rawText, 'Drivers', ['Operation Classification', 'Carrier Operation']) || findCellValue(cells, ['Drivers'])),
+    cargoCarried: parseCargo(rawText, findCellValue(cells, ['Cargo Carried'])),
+    driverInspections: inspections.driverInspections,
+    driverOutOfService: inspections.driverOutOfService,
+    driverOutOfServiceRate: inspections.driverOutOfServiceRate,
+    nationalDriverOutOfServiceRate: inspections.nationalDriverOutOfServiceRate,
+    vehicleInspections: inspections.vehicleInspections,
+    vehicleOutOfService: inspections.vehicleOutOfService,
+    vehicleOutOfServiceRate: inspections.vehicleOutOfServiceRate,
+    nationalVehicleOutOfServiceRate: inspections.nationalVehicleOutOfServiceRate,
+    hazmatInspections: inspections.hazmatInspections,
+    hazmatOutOfService: inspections.hazmatOutOfService,
+    hazmatOutOfServiceRate: inspections.hazmatOutOfServiceRate,
+    totalCrashes: crashes.totalCrashes,
+    fatalCrashes: crashes.fatalCrashes,
+    injuryCrashes: crashes.injuryCrashes,
+    towAwayCrashes: crashes.towAwayCrashes,
     fetchedAt: new Date().toISOString(),
     snapshotUrl,
-    rawText: stripTags(html).slice(0, 12000),
+    rawText: rawText.slice(0, 12000),
   };
 }
 
