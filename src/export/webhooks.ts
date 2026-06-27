@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { query } from '../db.js';
+import type { CarrierSafetyProfile } from '../safety/profile.js';
 
 export interface LeadExportRow {
   id: string;
@@ -57,6 +58,8 @@ export interface LeadExportRow {
   power_units: number | null;
   drivers: number | null;
   cargo: string[] | null;
+  carrierSafetyProfile: CarrierSafetyProfile | null;
+  carrier_safety_profile: CarrierSafetyProfile | null;
 }
 
 async function postJson(url: string, apiKey: string, payload: unknown): Promise<{ status: number; body: string }> {
@@ -75,7 +78,7 @@ export async function getTopLeads(limit = 100, minGrade = 'B', qualityGate = fal
   const gradeRank: Record<string, number> = { 'A+': 5, A: 4, B: 3, C: 2, SKIP: 1 };
   const minRank = gradeRank[minGrade] ?? 3;
   const qualityGateSql = qualityGate ? 'and l.sales_ready = true' : '';
-  const result = await query<LeadExportRow>(
+  const result = await query<LeadExportRow & { carrier_safety_profile: CarrierSafetyProfile | null }>(
     `select
        l.id, l.usdot_number, l.lead_grade, l.lead_score, l.lead_status,
        l.scoring_version, l.applied_rule_ids, l.scoring_reasons,
@@ -92,16 +95,21 @@ export async function getTopLeads(limit = 100, minGrade = 'B', qualityGate = fal
        c.usdot_status, c.allowed_to_operate,
        c.physical_street, c.physical_city, c.physical_state, c.physical_zip,
        c.mailing_street, c.mailing_city, c.mailing_state, c.mailing_zip,
-       c.phone, c.email, c.power_units, c.drivers, c.cargo
+       c.phone, c.email, c.power_units, c.drivers, c.cargo,
+       sp.profile_json as carrier_safety_profile
      from insurance_leads l
      join fmcsa_carriers c on c.id = l.carrier_id
+     left join carrier_safety_profiles sp on sp.carrier_id = c.id
      where case l.lead_grade when 'A+' then 5 when 'A' then 4 when 'B' then 3 when 'C' then 2 else 1 end >= $1
        ${qualityGateSql}
      order by l.lead_score desc, l.updated_at desc
      limit $2`,
     [minRank, limit]
   );
-  return result.rows;
+  return result.rows.map((row) => ({
+    ...row,
+    carrierSafetyProfile: row.carrier_safety_profile ?? null,
+  }));
 }
 
 export async function exportToArkon(limit = 100, minGrade = 'B'): Promise<{ sent: number; skipped: boolean; agencyId?: string; qualityGate: boolean }> {
