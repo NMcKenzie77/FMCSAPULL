@@ -11,7 +11,8 @@
     "import": "tsx src/index.ts import",
     "db:init": "tsx src/index.ts db:init",
     "score:refresh": "tsx src/index.ts score:refresh",
-    "safer:refresh": "tsx src/safety/runSaferRefresh.ts",
+    "safer:refresh": "node --import ./dist/portal.js dist/safety/runSaferRefresh.js",
+    "safer:refresh:dev": "tsx src/safety/runSaferRefresh.ts",
     "export:arkon": "tsx src/index.ts export:arkon",
     "export:sheets": "tsx src/index.ts export:sheets"
   },
