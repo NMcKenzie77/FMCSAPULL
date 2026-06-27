@@ -1,11 +1,11 @@
-import type { PoolClient } from 'pg';
+import type { QueryResult } from 'pg';
 import { query } from '../db.js';
 
 export type CarrierSafetyRiskLevel = 'LOW' | 'MODERATE' | 'ELEVATED' | 'HIGH' | 'UNKNOWN';
 export type CarrierSafetyProfile = ReturnType<typeof buildCarrierSafetyProfile>;
 
 type CarrierLike = Record<string, unknown>;
-type Queryable = Pick<PoolClient, 'query'>;
+type Queryable = { query(sql: string, params?: unknown[]): Promise<QueryResult> };
 
 function firstDefined(...values: unknown[]) {
   return values.find((value) => value !== undefined && value !== null && value !== '');
@@ -313,8 +313,9 @@ export async function refreshCarrierSafetyProfiles(limit = 1000): Promise<{ refr
   );
 
   let refreshed = 0;
+  const queryable: Queryable = { query: (sql: string, params?: unknown[]) => query(sql, params) };
   for (const row of result.rows) {
-    await upsertCarrierSafetyProfile({ query }, Number(row.id), row);
+    await upsertCarrierSafetyProfile(queryable, Number(row.id), row);
     refreshed += 1;
   }
 
