@@ -55,6 +55,40 @@ create index if not exists idx_fmcsa_carriers_power_units on fmcsa_carriers (pow
 create index if not exists idx_fmcsa_carriers_last_seen on fmcsa_carriers (last_seen_at desc);
 create index if not exists idx_fmcsa_carriers_raw_gin on fmcsa_carriers using gin (raw);
 
+create table if not exists carrier_safety_profiles (
+  id bigserial primary key,
+  carrier_id bigint not null references fmcsa_carriers(id) on delete cascade,
+  usdot_number text not null,
+  source text not null default 'FMCSA_PUBLIC_DATA',
+  pulled_at timestamptz not null default now(),
+  safety_rating text,
+  safety_rating_date date,
+  operating_status text,
+  authority_status text,
+  driver_oos_rate numeric,
+  vehicle_oos_rate numeric,
+  national_driver_oos_rate numeric,
+  national_vehicle_oos_rate numeric,
+  total_crashes integer,
+  fatal_crashes integer,
+  injury_crashes integer,
+  tow_away_crashes integer,
+  risk_level text not null default 'UNKNOWN',
+  risk_reasons_json jsonb not null default '[]'::jsonb,
+  recommended_questions_json jsonb not null default '[]'::jsonb,
+  missing_data_json jsonb not null default '[]'::jsonb,
+  profile_json jsonb not null default '{}'::jsonb,
+  raw_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (carrier_id)
+);
+
+create index if not exists idx_carrier_safety_profiles_usdot on carrier_safety_profiles (usdot_number);
+create index if not exists idx_carrier_safety_profiles_risk on carrier_safety_profiles (risk_level);
+create index if not exists idx_carrier_safety_profiles_pulled on carrier_safety_profiles (pulled_at desc);
+create index if not exists idx_carrier_safety_profiles_json_gin on carrier_safety_profiles using gin (profile_json);
+
 create table if not exists insurance_leads (
   id bigserial primary key,
   carrier_id bigint not null references fmcsa_carriers(id) on delete cascade,
