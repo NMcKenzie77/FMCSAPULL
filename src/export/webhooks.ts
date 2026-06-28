@@ -15,6 +15,18 @@ export interface LeadExportRow {
   outreach_angle: string | null;
   sales_ready: boolean;
   sales_ready_reason: string | null;
+  opportunity_id: string | null;
+  opportunity_type: string | null;
+  opportunity_key: string | null;
+  opportunity_status: string | null;
+  opportunity_priority: number | null;
+  opportunity_title: string | null;
+  opportunity_reason: string | null;
+  opportunity_recommended_action: string | null;
+  renewal_stage: string | null;
+  renewal_date: string | null;
+  insurance_signal_json: Record<string, unknown> | null;
+  opportunity_json: Record<string, unknown> | null;
   hq_name: string | null;
   hq_street: string | null;
   hq_city: string | null;
@@ -87,13 +99,27 @@ async function postJson(url: string, apiKey: string, payload: unknown): Promise<
 export async function getTopLeads(limit = 100, minGrade = 'B', qualityGate = false): Promise<LeadExportRow[]> {
   const gradeRank: Record<string, number> = { 'A+': 5, A: 4, B: 3, C: 2, SKIP: 1 };
   const minRank = gradeRank[minGrade] ?? 3;
-  const qualityGateSql = qualityGate ? 'and l.sales_ready = true' : '';
+  const qualityGateSql = qualityGate ? 'and (l.sales_ready = true or o.priority >= 80)' : '';
   const result = await query<LeadExportRow & { carrier_safety_profile: CarrierSafetyProfile | null }>(
     `select
        l.id, l.usdot_number, l.lead_grade, l.lead_score, l.lead_status,
        l.scoring_version, l.applied_rule_ids, l.scoring_reasons,
-       l.recommended_products, l.outreach_angle,
-       l.sales_ready, l.sales_ready_reason,
+       l.recommended_products,
+       coalesce(l.outreach_angle, o.recommended_action) as outreach_angle,
+       case when l.sales_ready = true or o.priority >= 80 then true else false end as sales_ready,
+       coalesce(l.sales_ready_reason, o.reason) as sales_ready_reason,
+       o.id as opportunity_id,
+       o.opportunity_type,
+       o.opportunity_key,
+       o.status as opportunity_status,
+       o.priority as opportunity_priority,
+       o.title as opportunity_title,
+       o.reason as opportunity_reason,
+       o.recommended_action as opportunity_recommended_action,
+       o.renewal_stage,
+       o.renewal_date,
+       o.insurance_signal_json,
+       o.opportunity_json,
        l.hq_name, l.hq_street, l.hq_city, l.hq_state, l.hq_zip, l.hq_country, l.hq_source, l.hq_confidence,
        l.registered_agent_name, l.registered_agent_type, l.registered_agent_address,
        l.officer_name, l.officer_title, l.officer_source,
@@ -109,17 +135,30 @@ export async function getTopLeads(limit = 100, minGrade = 'B', qualityGate = fal
        sp.profile_json as carrier_safety_profile
      from insurance_leads l
      join fmcsa_carriers c on c.id = l.carrier_id
+     join carrier_opportunities o on o.usdot_number = l.usdot_number and o.status = 'OPEN'
      left join carrier_safety_profiles sp on sp.carrier_id = c.id
      where case l.lead_grade when 'A+' then 5 when 'A' then 4 when 'B' then 3 when 'C' then 2 else 1 end >= $1
        ${qualityGateSql}
        ${activeCarrierSql}
-     order by l.lead_score desc, l.updated_at desc
+     order by o.priority desc, l.lead_score desc, o.last_seen_at desc
      limit $2`,
     [minRank, limit]
   );
   return result.rows.map((row) => ({
     ...row,
     carrierSafetyProfile: row.carrier_safety_profile ?? null,
+    opportunityId: row.opportunity_id,
+    opportunityType: row.opportunity_type,
+    opportunityKey: row.opportunity_key,
+    opportunityStatus: row.opportunity_status,
+    opportunityPriority: row.opportunity_priority,
+    opportunityTitle: row.opportunity_title,
+    opportunityReason: row.opportunity_reason,
+    opportunityRecommendedAction: row.opportunity_recommended_action,
+    renewalStage: row.renewal_stage,
+    renewalDate: row.renewal_date,
+    insuranceSignal: row.insurance_signal_json,
+    opportunityJson: row.opportunity_json,
   }));
 }
 
