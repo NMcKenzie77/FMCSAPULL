@@ -145,6 +145,56 @@ create index if not exists idx_insurance_leads_scoring_version on insurance_lead
 create index if not exists idx_insurance_leads_sales_ready on insurance_leads (sales_ready, lead_score desc);
 create index if not exists idx_insurance_leads_hq_state on insurance_leads (hq_state);
 
+create table if not exists carrier_opportunities (
+  id bigserial primary key,
+  carrier_id bigint not null references fmcsa_carriers(id) on delete cascade,
+  usdot_number text not null,
+  opportunity_type text not null,
+  opportunity_key text not null,
+  status text not null default 'OPEN',
+  priority integer not null default 0,
+  title text not null,
+  reason text not null,
+  recommended_action text,
+  renewal_stage text,
+  renewal_date date,
+  insurance_signal_json jsonb not null default '{}'::jsonb,
+  opportunity_json jsonb not null default '{}'::jsonb,
+  first_seen_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  closed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (usdot_number, opportunity_type, opportunity_key)
+);
+
+create index if not exists idx_carrier_opportunities_carrier on carrier_opportunities (carrier_id);
+create index if not exists idx_carrier_opportunities_status_priority on carrier_opportunities (status, priority desc, last_seen_at desc);
+create index if not exists idx_carrier_opportunities_type on carrier_opportunities (opportunity_type);
+create index if not exists idx_carrier_opportunities_renewal on carrier_opportunities (renewal_date);
+create index if not exists idx_carrier_opportunities_json_gin on carrier_opportunities using gin (opportunity_json);
+
+create table if not exists outreach_log (
+  id bigserial primary key,
+  carrier_id bigint references fmcsa_carriers(id) on delete cascade,
+  opportunity_id bigint references carrier_opportunities(id) on delete set null,
+  usdot_number text not null,
+  outreach_key text not null,
+  channel text not null default 'MANUAL',
+  sequence_step text,
+  status text not null default 'PLANNED',
+  producer_id text,
+  notes text,
+  payload_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (usdot_number, outreach_key)
+);
+
+create index if not exists idx_outreach_log_usdot on outreach_log (usdot_number, created_at desc);
+create index if not exists idx_outreach_log_opportunity on outreach_log (opportunity_id);
+create index if not exists idx_outreach_log_status on outreach_log (status);
+
 create table if not exists state_registry_sources (
   id bigserial primary key,
   state_code text not null,
