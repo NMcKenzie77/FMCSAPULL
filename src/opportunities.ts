@@ -65,8 +65,8 @@ export function hasInsuranceRequiredSignal(carrier: NormalizedCarrier) {
   return requiredKeys.some((key) => yes(insurance[key]));
 }
 
-function isNewAuthorityCandidate(carrier: NormalizedCarrier, isNewRecord: boolean) {
-  return isNewRecord || [carrier.authorityStatus, carrier.usdotStatus, carrier.allowedToOperate].some((value) => hasMarker(value, newAuthorityMarkers));
+function isNewAuthorityCandidate(carrier: NormalizedCarrier) {
+  return [carrier.authorityStatus, carrier.usdotStatus, carrier.allowedToOperate].some((value) => hasMarker(value, newAuthorityMarkers));
 }
 
 function targetFleetForExisting(carrier: NormalizedCarrier) {
@@ -96,13 +96,13 @@ function insuranceSignal(carrier: NormalizedCarrier) {
   };
 }
 
-export function classifyCarrierOpportunity(carrier: NormalizedCarrier, isNewRecord = false): CarrierOpportunityInput | null {
+export function classifyCarrierOpportunity(carrier: NormalizedCarrier, _isNewRecord = false): CarrierOpportunityInput | null {
   if (!carrier.usdotNumber || isInactiveCarrier(carrier)) return null;
 
   const units = Number(carrier.powerUnits ?? 0);
   const insured = hasInsuranceOnFileSignal(carrier);
   const required = hasInsuranceRequiredSignal(carrier);
-  const newAuthority = isNewAuthorityCandidate(carrier, isNewRecord);
+  const newAuthority = isNewAuthorityCandidate(carrier);
   const signal = insuranceSignal(carrier);
   const company = carrier.dbaName || carrier.legalName || `USDOT ${carrier.usdotNumber}`;
 
