@@ -62,6 +62,16 @@ export interface LeadExportRow {
   carrier_safety_profile: CarrierSafetyProfile | null;
 }
 
+const activeCarrierSql = `
+       and upper(coalesce(c.authority_status, '')) not like '%INACTIVE%'
+       and upper(coalesce(c.authority_status, '')) not like '%REVOKED%'
+       and upper(coalesce(c.authority_status, '')) not like '%DISMISSED%'
+       and upper(coalesce(c.authority_status, '')) not like '%OUT OF SERVICE%'
+       and upper(coalesce(c.usdot_status, '')) not like '%INACTIVE%'
+       and upper(coalesce(c.usdot_status, '')) not like '%REVOKED%'
+       and upper(coalesce(c.usdot_status, '')) not like '%DISMISSED%'
+       and upper(coalesce(c.usdot_status, '')) not like '%OUT OF SERVICE%'`;
+
 async function postJson(url: string, apiKey: string, payload: unknown): Promise<{ status: number; body: string }> {
   const response = await fetch(url, {
     method: 'POST',
@@ -102,6 +112,7 @@ export async function getTopLeads(limit = 100, minGrade = 'B', qualityGate = fal
      left join carrier_safety_profiles sp on sp.carrier_id = c.id
      where case l.lead_grade when 'A+' then 5 when 'A' then 4 when 'B' then 3 when 'C' then 2 else 1 end >= $1
        ${qualityGateSql}
+       ${activeCarrierSql}
      order by l.lead_score desc, l.updated_at desc
      limit $2`,
     [minRank, limit]
