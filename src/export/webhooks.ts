@@ -78,11 +78,19 @@ const activeCarrierSql = `
        and upper(coalesce(c.authority_status, '')) not like '%INACTIVE%'
        and upper(coalesce(c.authority_status, '')) not like '%REVOKED%'
        and upper(coalesce(c.authority_status, '')) not like '%DISMISSED%'
-       and upper(coalesce(c.authority_status, '')) not like '%OUT OF SERVICE%'
+       and (
+         upper(coalesce(c.authority_status, '')) not like '%OUT OF SERVICE%'
+         or upper(coalesce(c.authority_status, '')) like '%NOT OUT OF SERVICE%'
+         or upper(coalesce(c.authority_status, '')) like '%NO OUT OF SERVICE%'
+       )
        and upper(coalesce(c.usdot_status, '')) not like '%INACTIVE%'
        and upper(coalesce(c.usdot_status, '')) not like '%REVOKED%'
        and upper(coalesce(c.usdot_status, '')) not like '%DISMISSED%'
-       and upper(coalesce(c.usdot_status, '')) not like '%OUT OF SERVICE%'`;
+       and (
+         upper(coalesce(c.usdot_status, '')) not like '%OUT OF SERVICE%'
+         or upper(coalesce(c.usdot_status, '')) like '%NOT OUT OF SERVICE%'
+         or upper(coalesce(c.usdot_status, '')) like '%NO OUT OF SERVICE%'
+       )`;
 
 async function postJson(url: string, apiKey: string, payload: unknown): Promise<{ status: number; body: string }> {
   const response = await fetch(url, {
@@ -99,14 +107,14 @@ async function postJson(url: string, apiKey: string, payload: unknown): Promise<
 export async function getTopLeads(limit = 100, minGrade = 'B', qualityGate = false): Promise<LeadExportRow[]> {
   const gradeRank: Record<string, number> = { 'A+': 5, A: 4, B: 3, C: 2, SKIP: 1 };
   const minRank = gradeRank[minGrade] ?? 3;
-  const qualityGateSql = qualityGate ? 'and (l.sales_ready = true or o.priority >= 80)' : '';
+  const qualityGateSql = qualityGate ? 'and (l.sales_ready = true or coalesce(o.priority, 0) >= 80)' : '';
   const result = await query<LeadExportRow & { carrier_safety_profile: CarrierSafetyProfile | null }>(
     `select
        l.id, l.usdot_number, l.lead_grade, l.lead_score, l.lead_status,
        l.scoring_version, l.applied_rule_ids, l.scoring_reasons,
        l.recommended_products,
        coalesce(l.outreach_angle, o.recommended_action) as outreach_angle,
-       case when l.sales_ready = true or o.priority >= 80 then true else false end as sales_ready,
+       case when l.sales_ready = true or coalesce(o.priority, 0) >= 80 then true else false end as sales_ready,
        coalesce(l.sales_ready_reason, o.reason) as sales_ready_reason,
        o.id as opportunity_id,
        o.opportunity_type,
@@ -135,12 +143,12 @@ export async function getTopLeads(limit = 100, minGrade = 'B', qualityGate = fal
        sp.profile_json as carrier_safety_profile
      from insurance_leads l
      join fmcsa_carriers c on c.id = l.carrier_id
-     join carrier_opportunities o on o.usdot_number = l.usdot_number and o.status = 'OPEN'
+     left join carrier_opportunities o on o.usdot_number = l.usdot_number and o.status = 'OPEN'
      left join carrier_safety_profiles sp on sp.carrier_id = c.id
      where case l.lead_grade when 'A+' then 5 when 'A' then 4 when 'B' then 3 when 'C' then 2 else 1 end >= $1
        ${qualityGateSql}
        ${activeCarrierSql}
-     order by o.priority desc, l.lead_score desc, o.last_seen_at desc
+     order by coalesce(o.priority, 0) desc, l.lead_score desc, coalesce(o.last_seen_at, l.updated_at) desc
      limit $2`,
     [minRank, limit]
   );
