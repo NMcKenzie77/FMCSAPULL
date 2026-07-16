@@ -16,19 +16,43 @@ function env(name: string, fallback = ''): string {
 }
 
 const TEXAS_PUBLIC_DATA_BASE_URL = 'https://api.comptroller.texas.gov/public-data/v1/public';
+const CURRENT_COMPANY_CENSUS_DATASET = 'az4n-8mr2';
+const CURRENT_CARRIER_ALL_HISTORY_DATASET = 'u4i8-4m26';
+const LEGACY_CARRIER_DAILY_DATASET = '6qg9-x4f8';
+const LEGACY_CARRIER_ALL_HISTORY_DATASET = '6eyk-hxee';
+
+function currentCompanyCensusDataset(): string {
+  return env('FMCSA_COMPANY_CENSUS_DATASET', CURRENT_COMPANY_CENSUS_DATASET);
+}
+
+function carrierDailyDataset(): string {
+  const configured = env('FMCSA_CARRIER_DAILY_DATASET');
+  // The old Carrier daily-difference asset is a downloadable text resource, not a
+  // reliable Socrata JSON table. Preserve the old source name as a compatibility
+  // alias, but pull from the current daily Company Census API instead.
+  if (!configured || configured === LEGACY_CARRIER_DAILY_DATASET) return currentCompanyCensusDataset();
+  return configured;
+}
+
+function carrierAllHistoryDataset(): string {
+  const configured = env('FMCSA_CARRIER_ALL_HISTORY_DATASET');
+  if (!configured || configured === LEGACY_CARRIER_ALL_HISTORY_DATASET) return CURRENT_CARRIER_ALL_HISTORY_DATASET;
+  return configured;
+}
 
 export const config = {
   port: intEnv('PORT', 3000),
   databaseUrl: env('DATABASE_URL'),
   adminApiKey: env('ADMIN_API_KEY'),
   dataHost: 'https://data.transportation.gov',
+  socrataAppToken: env('SOCRATA_APP_TOKEN'),
   datasets: {
-    carrierDaily: env('FMCSA_CARRIER_DAILY_DATASET', '6qg9-x4f8'),
-    carrierAllHistory: env('FMCSA_CARRIER_ALL_HISTORY_DATASET', '6eyk-hxee'),
-    companyCensus: env('FMCSA_COMPANY_CENSUS_DATASET', 'az4n-8mr2')
+    carrierDaily: carrierDailyDataset(),
+    carrierAllHistory: carrierAllHistoryDataset(),
+    companyCensus: currentCompanyCensusDataset()
   },
   importLimit: intEnv('FMCSA_IMPORT_LIMIT', 5000),
-  defaultImportSource: (process.env.FMCSA_IMPORT_SOURCE as ImportSource | undefined) ?? 'carrier-daily',
+  defaultImportSource: (process.env.FMCSA_IMPORT_SOURCE as ImportSource | undefined) ?? 'company-census',
   defaultAgencyId: env('DEFAULT_AGENCY_ID', 'invicta-capital-group'),
   arkonWebhookUrl: env('ARKON_WEBHOOK_URL'),
   arkonWebhookSecret: env('ARKON_WEBHOOK_SECRET'),
