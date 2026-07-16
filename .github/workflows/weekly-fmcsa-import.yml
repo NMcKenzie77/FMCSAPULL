@@ -1,32 +1,31 @@
-name: Weekly FMCSA Import
+name: Daily FMCSA Import
 
 on:
   schedule:
-    # Runs every Monday at 9:00 AM UTC.
-    - cron: '0 9 * * 1'
+    # Runs every day at 6:00 PM UTC after the daily FMCSA Company Census refresh.
+    - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
       source:
         description: 'FMCSA import source'
         required: false
-        default: 'carrier-daily'
+        default: 'company-census'
         type: choice
         options:
-          - carrier-daily
-          - carrier-all-history
           - company-census
+          - carrier-daily
       limit:
-        description: 'Maximum records to import'
+        description: 'Maximum newest records to import'
         required: false
         default: '5000'
 
 concurrency:
-  group: weekly-fmcsa-import
+  group: daily-fmcsa-import
   cancel-in-progress: false
 
 jobs:
   import:
-    name: Run weekly FMCSA import
+    name: Import newest FMCSA carriers
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -34,7 +33,7 @@ jobs:
         id: vars
         shell: bash
         run: |
-          SOURCE="${{ github.event.inputs.source || 'carrier-daily' }}"
+          SOURCE="${{ github.event.inputs.source || 'company-census' }}"
           LIMIT="${{ github.event.inputs.limit || '5000' }}"
           echo "source=${SOURCE}" >> "$GITHUB_OUTPUT"
           echo "limit=${LIMIT}" >> "$GITHUB_OUTPUT"
@@ -60,29 +59,17 @@ jobs:
           fi
 
           BASE_URL="${FMCSAPULL_BASE_URL%/}"
-          PAYLOAD=$(printf '{"source":"%s","limit":%s}' "$SOURCE" "$LIMIT")
 
-          echo "Triggering FMCSA import: source=${SOURCE}, limit=${LIMIT}"
+          echo "Checking FMCSA source before import"
+          curl --fail-with-body \
+            --url "${BASE_URL}/admin/datasets/check?source=${SOURCE}" \
+            --header "x-admin-api-key: ${FMCSAPULL_ADMIN_API_KEY}"
+
+          PAYLOAD=$(printf '{"source":"%s","limit":%s}' "$SOURCE" "$LIMIT")
+          echo "Importing newest FMCSA records: source=${SOURCE}, limit=${LIMIT}"
           curl --fail-with-body \
             --request POST \
             --url "${BASE_URL}/admin/import" \
             --header "content-type: application/json" \
             --header "x-admin-api-key: ${FMCSAPULL_ADMIN_API_KEY}" \
             --data "$PAYLOAD"
-
-      - name: Refresh FMCSA scores
-        env:
-          FMCSAPULL_BASE_URL: ${{ secrets.FMCSAPULL_BASE_URL }}
-          FMCSAPULL_ADMIN_API_KEY: ${{ secrets.FMCSAPULL_ADMIN_API_KEY }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          BASE_URL="${FMCSAPULL_BASE_URL%/}"
-
-          echo "Refreshing scores after import"
-          curl --fail-with-body \
-            --request POST \
-            --url "${BASE_URL}/admin/score/refresh" \
-            --header "content-type: application/json" \
-            --header "x-admin-api-key: ${FMCSAPULL_ADMIN_API_KEY}" \
-            --data '{}'
