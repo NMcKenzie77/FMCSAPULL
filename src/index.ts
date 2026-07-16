@@ -42,12 +42,12 @@ async function main() {
 
   console.log(`Usage:
   npm run db:init
-  npm run import -- [carrier-daily|carrier-all-history|company-census] [limit]
+  npm run import -- [company-census|carrier-daily|carrier-all-history] [limit]
   npm run score:refresh
   npm run start
 
-Railway Cron command:
-  npm run import -- carrier-daily 5000`);
+Recommended Railway Cron command:
+  npm run import -- company-census 5000`);
 }
 
 main()
