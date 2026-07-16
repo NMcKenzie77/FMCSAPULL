@@ -106,7 +106,8 @@ function insurance(record: SocrataRecord): Record<string, unknown> {
   const keys = [
     'bipd_required', 'bipd_on_file', 'bipd_file', 'bipd_underlying_limit', 'bipd_max_limit',
     'cargo_required', 'cargo_on_file', 'cargo_file', 'bond_required', 'bond_on_file',
-    'insurance_required', 'insurance_on_file', 'insurance_company_name', 'policy_number', 'policy_type'
+    'insurance_required', 'insurance_on_file', 'insurance_company_name', 'policy_number', 'policy_type',
+    'op_auth_type', 'op_auth_status', 'common_stat', 'contract_stat', 'broker_stat'
   ];
   const output: Record<string, unknown> = {};
   for (const key of keys) {
@@ -123,12 +124,12 @@ export function normalizeCarrier(record: SocrataRecord): NormalizedCarrier | nul
   return {
     usdotNumber,
     docketNumber: str(record, ['docket_number', 'mc_mx_ff_number', 'mc_number', 'mx_number', 'docket_no']),
-    docketPrefix: str(record, ['docket_prefix', 'prefix']),
+    docketPrefix: str(record, ['docket_prefix', 'prefix', 'mx_type']),
     legalName: str(record, ['legal_name', 'carrier_name', 'name', 'business_name']),
     dbaName: str(record, ['dba_name', 'doing_business_as', 'dba']),
     entityType: str(record, ['entity_type', 'entity', 'entity_type_desc']),
     carrierOperation: str(record, ['carrier_operation', 'carrier_operation_desc', 'operation_classification']),
-    authorityStatus: str(record, ['authority_status', 'common_authority_status', 'contract_authority_status', 'status', 'auth_status']),
+    authorityStatus: str(record, ['op_auth_status', 'authority_status', 'common_authority_status', 'contract_authority_status', 'common_stat', 'contract_stat', 'broker_stat', 'status', 'auth_status']),
     usdotStatus: str(record, ['usdot_status', 'status_code', 'dot_status']),
     allowedToOperate: str(record, ['allowed_to_operate', 'allowed_to_operate_desc']),
     physicalStreet: str(record, ['phy_street', 'physical_street', 'physical_address', 'street']),
